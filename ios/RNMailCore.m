@@ -474,6 +474,7 @@ RCT_EXPORT_METHOD(getMail:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)r
                                              [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength]];
                      MCOMessageParser *messageParser = [[MCOMessageParser alloc] initWithData:data];
                      NSString *msgHTMLBody = [messageParser htmlBodyRendering];
+                     NSString *plainTextBody = [messageParser plainTextBodyRendering];
                      NSArray *inlineAttachments = [messageParser htmlInlineAttachments];
                      NSMutableArray *inlines = [[NSMutableArray alloc] init];
                      for(MCOAttachment *inlineAttachment in inlineAttachments) {
@@ -484,6 +485,7 @@ RCT_EXPORT_METHOD(getMail:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)r
                      }
                      
                      [result setValue:msgHTMLBody forKey:@"body"];
+                     [result setValue:plainTextBody forKey: @"plainBody"];
                      [result setObject:inlines forKey:@"inline"];
                      [result setValue:@"SUCCESS" forKey:@"status"];
                      resolve(result);
