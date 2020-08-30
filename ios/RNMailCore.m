@@ -1,4 +1,5 @@
 #import "RNMailCore.h"
+#import "EmailHelper.h"
 #import <MailCore/MailCore.h>
 #import <React/RCTConvert.h>
 
@@ -30,7 +31,13 @@ RCT_EXPORT_METHOD(loginSmtp:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     int authType = [RCTConvert int:obj[@"authType"]];
     [smtpSession setAuthType:authType];
     if (authType == MCOAuthTypeXOAuth2) {
-        [smtpSession setOAuth2Token:[RCTConvert NSString:obj[@"password"]]];
+        EmailHelper* eh = [EmailHelper singleton];
+        if (eh.authorization.canAuthorize) {
+            smtpSession.authType = MCOAuthTypeXOAuth2;
+            [smtpSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
+        } else {
+            [smtpSession setOAuth2Token:[RCTConvert NSString:obj[@"password"]]];
+        }
     } else {
         smtpSession.password = [RCTConvert NSString:obj[@"password"]];
     }
@@ -61,7 +68,13 @@ RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     int authType = [RCTConvert int:obj[@"authType"]];
     [imapSession setAuthType:authType];
     if (authType == MCOAuthTypeXOAuth2) {
-        [imapSession setOAuth2Token:[RCTConvert NSString:obj[@"password"]]];
+        EmailHelper* eh = [EmailHelper singleton];
+        if (eh.authorization.canAuthorize) {
+            imapSession.authType = MCOAuthTypeXOAuth2;
+            [imapSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
+        } else {
+            [imapSession setOAuth2Token:[RCTConvert NSString:obj[@"password"]]];
+        }
     } else {
         imapSession.password = [RCTConvert NSString:obj[@"password"]];
     }
