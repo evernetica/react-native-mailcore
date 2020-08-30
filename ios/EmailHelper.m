@@ -103,6 +103,7 @@ static EmailHelper *shared = nil;
         self.authorization = authorization;
     } else {
         NSLog(@"EmailHelper: WARNING, loaded google authorization cannot authorize, discarding");
+        self.authorization = nil;
         [GTMAppAuthFetcherAuthorization removeAuthorizationFromKeychainForName:kAuthorizerKey];
     }
 }
