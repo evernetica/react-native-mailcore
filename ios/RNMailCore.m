@@ -47,8 +47,8 @@ RCT_EXPORT_METHOD(loginSmtp:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
         }
     } else {
         smtpSession.password = [RCTConvert NSString:obj[@"password"]];
+        [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
     }
-    [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
 }
 
 RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
@@ -78,8 +78,8 @@ RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
         }
     } else {
         imapSession.password = [RCTConvert NSString:obj[@"password"]];
+        [self startImapOperation:imapSession resolver:resolve rejecter:reject];
     }
-    [self startImapOperation:imapSession resolver:resolve rejecter:reject];
 }
 
 RCT_EXPORT_METHOD(createFolder:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
