@@ -18,7 +18,7 @@ static NSString *const kIssuer = @"https://accounts.google.com";
  https://console.developers.google.com/apis/credentials?project=_
  The client should be registered with the "iOS" type.
  */
-static NSString *const kClientID = @"963823664528-9ece7qad7jv6eu5mhf61ilvhcvqcsar9.apps.googleusercontent.com";
+static NSString *kClientID = @"963823664528-9ece7qad7jv6eu5mhf61ilvhcvqcsar9.apps.googleusercontent.com";
 
 /*! @brief The OAuth redirect URI for the client @c kClientID.
  @discussion With Google, the scheme of the redirect URI is the reverse DNS notation of the
@@ -26,12 +26,12 @@ static NSString *const kClientID = @"963823664528-9ece7qad7jv6eu5mhf61ilvhcvqcsa
  property list ("CFBundleURLTypes" plist key). Any path component will work, we use
  'oauthredirect' here to help disambiguate from any other use of this scheme.
  */
-static NSString *const kRedirectURI =
+static NSString *kRedirectURI =
 @"com.googleusercontent.apps.963823664528-9ece7qad7jv6eu5mhf61ilvhcvqcsar9:/oauthredirect";
 
 /*! @brief @c NSCoding key for the authState property. You don't need to change this value.
  */
-static NSString *const kExampleAuthorizerKey = @"googleOAuthCodingKey";
+static NSString *kAuthorizerKey = @"googleOAuthCodingKey";
 
 
 @implementation EmailHelper
@@ -49,6 +49,17 @@ static EmailHelper *shared = nil;
         [self loadState];
     }
     return self;
+}
+
+- (void)intialize:(NSString *)clientID
+       redirectURL:(NSString *)redirectURL {
+    kClientID = clientID;
+    kRedirectURI = redirectURL;
+}
+
+- (void)refreshState:(NSString *)authorizerKey {
+    kAuthorizerKey = authorizerKey;
+    [self loadState];
 }
 
 #pragma mark -
@@ -75,10 +86,10 @@ static EmailHelper *shared = nil;
  */
 - (void)saveState {
     if (_authorization.canAuthorize) {
-        [GTMAppAuthFetcherAuthorization saveAuthorization:_authorization toKeychainForName:kExampleAuthorizerKey];
+        [GTMAppAuthFetcherAuthorization saveAuthorization:_authorization toKeychainForName:kAuthorizerKey];
     } else {
         NSLog(@"EmailHelper: WARNING, attempt to save a google authorization which cannot authorize, discarding");
-        [GTMAppAuthFetcherAuthorization removeAuthorizationFromKeychainForName:kExampleAuthorizerKey];
+        [GTMAppAuthFetcherAuthorization removeAuthorizationFromKeychainForName:kAuthorizerKey];
     }
 }
 
@@ -86,13 +97,13 @@ static EmailHelper *shared = nil;
  */
 - (void)loadState {
     GTMAppAuthFetcherAuthorization* authorization =
-    [GTMAppAuthFetcherAuthorization authorizationFromKeychainForName:kExampleAuthorizerKey];
+    [GTMAppAuthFetcherAuthorization authorizationFromKeychainForName:kAuthorizerKey];
     
     if (authorization.canAuthorize) {
         self.authorization = authorization;
     } else {
         NSLog(@"EmailHelper: WARNING, loaded google authorization cannot authorize, discarding");
-        [GTMAppAuthFetcherAuthorization removeAuthorizationFromKeychainForName:kExampleAuthorizerKey];
+        [GTMAppAuthFetcherAuthorization removeAuthorizationFromKeychainForName:kAuthorizerKey];
     }
 }
 
@@ -154,7 +165,7 @@ static EmailHelper *shared = nil;
         if (error) {
             // OIDOAuthTokenErrorDomain indicates an issue with the authorization.
             if ([error.domain isEqual:OIDOAuthTokenErrorDomain]) {
-                [GTMAppAuthFetcherAuthorization removeAuthorizationFromKeychainForName:kExampleAuthorizerKey];
+                [GTMAppAuthFetcherAuthorization removeAuthorizationFromKeychainForName:kAuthorizerKey];
                 self.authorization = nil;
                 NSLog(@"EmailHelper: Authorization error during token refresh, cleared state. %@", error);
                 if (completionBlock)
