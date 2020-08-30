@@ -21,7 +21,8 @@ RCT_EXPORT_METHOD(loginSmtp:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     MCOSMTPSession *smtpSession = [[MCOSMTPSession alloc] init];
     smtpSession.hostname = [RCTConvert NSString:obj[@"hostname"]];
     smtpSession.port = [RCTConvert int:obj[@"port"]];
-    
+    [smtpSession setUsername:[RCTConvert NSString:obj[@"username"]]];
+
     if ([[RCTConvert NSString:obj[@"connectionType"]] isEqualToString:@"starttls"]) {
         smtpSession.connectionType = MCOConnectionTypeStartTLS;
     } else {
@@ -31,30 +32,23 @@ RCT_EXPORT_METHOD(loginSmtp:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     int authType = [RCTConvert int:obj[@"authType"]];
     [smtpSession setAuthType:authType];
     if (authType == MCOAuthTypeXOAuth2) {
+        smtpSession.authType = MCOAuthTypeXOAuth2;
         EmailHelper* eh = [EmailHelper singleton];
+        [eh refreshState:[RCTConvert NSString:obj[@"username"]]];
         if (eh.authorization.canAuthorize) {
-            smtpSession.authType = MCOAuthTypeXOAuth2;
             [smtpSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
+            [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
         } else {
-            [smtpSession setOAuth2Token:[RCTConvert NSString:obj[@"password"]]];
+            UIViewController *vc = [UIApplication sharedApplication].delegate.window.rootViewController;
+            [eh doEmailLoginIfRequiredOnVC:vc completionBlock:^{
+                [smtpSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
+                [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
+            }];
         }
     } else {
         smtpSession.password = [RCTConvert NSString:obj[@"password"]];
     }
-    [smtpSession setUsername:[RCTConvert NSString:obj[@"username"]]];
-    
-    _smtpObject = smtpSession;
-    MCOSMTPOperation *smtpOperation = [_smtpObject loginOperation];
-    [smtpOperation start:^(NSError *error) {
-        if(error) {
-            NSLog(@"Error sending email: %@", error);
-            reject(@"Error", error.localizedDescription, error);
-        } else {
-            NSLog(@"Successfully sent email!");
-            NSDictionary *result = @{@"status": @"SUCCESS"};
-            resolve(result);
-        }
-    }];
+    [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
 }
 
 RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
@@ -64,34 +58,28 @@ RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     imapSession.hostname = [RCTConvert NSString:obj[@"hostname"]];
     imapSession.port = [RCTConvert int:obj[@"port"]];
     imapSession.connectionType = MCOConnectionTypeTLS;
-    
+    [imapSession setUsername:[RCTConvert NSString:obj[@"username"]]];
+
     int authType = [RCTConvert int:obj[@"authType"]];
     [imapSession setAuthType:authType];
     if (authType == MCOAuthTypeXOAuth2) {
+        imapSession.authType = MCOAuthTypeXOAuth2;
         EmailHelper* eh = [EmailHelper singleton];
+        [eh refreshState:[RCTConvert NSString:obj[@"username"]]];
         if (eh.authorization.canAuthorize) {
-            imapSession.authType = MCOAuthTypeXOAuth2;
             [imapSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
+            [self startImapOperation:imapSession resolver:resolve rejecter:reject];
         } else {
-            [imapSession setOAuth2Token:[RCTConvert NSString:obj[@"password"]]];
+            UIViewController *vc = [UIApplication sharedApplication].delegate.window.rootViewController;
+            [eh doEmailLoginIfRequiredOnVC:vc completionBlock:^{
+                [imapSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
+                [self startImapOperation:imapSession resolver:resolve rejecter:reject];
+            }];
         }
     } else {
         imapSession.password = [RCTConvert NSString:obj[@"password"]];
     }
-    [imapSession setUsername:[RCTConvert NSString:obj[@"username"]]];
-    
-    _imapSession = imapSession;
-    MCOIMAPOperation *imapOperation = [_imapSession checkAccountOperation];
-    [imapOperation start:^(NSError *error) {
-        if(error) {
-            NSLog(@"Error sending email: %@", error);
-            reject(@"Error", error.localizedDescription, error);
-        } else {
-            NSLog(@"Successfully sent email!");
-            NSDictionary *result = @{@"status": @"SUCCESS"};
-            resolve(result);
-        }
-    }];
+    [self startImapOperation:imapSession resolver:resolve rejecter:reject];
 }
 
 RCT_EXPORT_METHOD(createFolder:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
@@ -850,6 +838,38 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
             [self parseMessages:error messages:messages reject:reject resolve:resolve];
         }];
         
+    }];
+}
+
+- (void)startImapOperation:(MCOIMAPSession *)imapSession resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject {
+    _imapSession = imapSession;
+    MCOIMAPOperation *imapOperation = [_imapSession checkAccountOperation];
+    [imapOperation start:^(NSError *error) {
+        if(error) {
+            NSLog(@"Error sending email: %@", error);
+            reject(@"Error", error.localizedDescription, error);
+        } else {
+            NSLog(@"Successfully sent email!");
+            NSDictionary *result = @{@"status": @"SUCCESS"};
+            resolve(result);
+        }
+    }];
+}
+
+- (void)startSmtpOperation:(MCOSMTPSession *)smtpSession resolver:(RCTPromiseResolveBlock)resolve
+                rejecter:(RCTPromiseRejectBlock)reject {
+    _smtpObject = smtpSession;
+    MCOSMTPOperation *smtpOperation = [_smtpObject loginOperation];
+    [smtpOperation start:^(NSError *error) {
+        if(error) {
+            NSLog(@"Error sending email: %@", error);
+            reject(@"Error", error.localizedDescription, error);
+        } else {
+            NSLog(@"Successfully sent email!");
+            NSDictionary *result = @{@"status": @"SUCCESS"};
+            resolve(result);
+        }
     }];
 }
 
