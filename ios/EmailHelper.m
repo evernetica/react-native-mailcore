@@ -51,7 +51,7 @@ static EmailHelper *shared = nil;
     return self;
 }
 
-- (void)intialize:(NSString *)clientID
+- (void)initialize:(NSString *)clientID
        redirectURL:(NSString *)redirectURL {
     kClientID = clientID;
     kRedirectURI = redirectURL;
