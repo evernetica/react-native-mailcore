@@ -18,5 +18,6 @@ Pod::Spec.new do |s|
   s.source_files   = "ios/*.{h,m}"
 
   s.dependency 'React'
-  s.dependency 'mailcore2-ios'
+  s.dependency 'AppAuth'
+  s.dependency 'GTMAppAuth'
 end
