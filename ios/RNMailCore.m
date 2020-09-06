@@ -1,5 +1,4 @@
 #import "RNMailCore.h"
-#import "EmailHelper.h"
 #import <MailCore/MailCore.h>
 #import <React/RCTConvert.h>
 
