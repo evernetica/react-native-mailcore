@@ -33,18 +33,8 @@ RCT_EXPORT_METHOD(loginSmtp:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     [smtpSession setAuthType:authType];
     if (authType == MCOAuthTypeXOAuth2) {
         smtpSession.authType = MCOAuthTypeXOAuth2;
-        EmailHelper* eh = [EmailHelper singleton];
-        [eh refreshState:[RCTConvert NSString:obj[@"username"]]];
-        if (eh.authorization.canAuthorize) {
-            [smtpSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
-            [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
-        } else {
-            UIViewController *vc = [UIApplication sharedApplication].delegate.window.rootViewController;
-            [eh doEmailLoginIfRequiredOnVC:vc completionBlock:^{
-                [smtpSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
-                [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
-            }];
-        }
+        [smtpSession setOAuth2Token:[RCTConvert NSString:obj[@"accessToken"]]];
+        [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
     } else {
         smtpSession.password = [RCTConvert NSString:obj[@"password"]];
         [self startSmtpOperation:smtpSession resolver:resolve rejecter:reject];
@@ -64,18 +54,8 @@ RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     [imapSession setAuthType:authType];
     if (authType == MCOAuthTypeXOAuth2) {
         imapSession.authType = MCOAuthTypeXOAuth2;
-        EmailHelper* eh = [EmailHelper singleton];
-        [eh refreshState:[RCTConvert NSString:obj[@"username"]]];
-        if (eh.authorization.canAuthorize) {
-            [imapSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
-            [self startImapOperation:imapSession resolver:resolve rejecter:reject];
-        } else {
-            UIViewController *vc = [UIApplication sharedApplication].delegate.window.rootViewController;
-            [eh doEmailLoginIfRequiredOnVC:vc completionBlock:^{
-                [imapSession setOAuth2Token:eh.authorization.authState.lastTokenResponse.accessToken];
-                [self startImapOperation:imapSession resolver:resolve rejecter:reject];
-            }];
-        }
+        [imapSession setOAuth2Token:[RCTConvert NSString:obj[@"accessToken"]]];
+        [self startImapOperation:imapSession resolver:resolve rejecter:reject];
     } else {
         imapSession.password = [RCTConvert NSString:obj[@"password"]];
         [self startImapOperation:imapSession resolver:resolve rejecter:reject];
