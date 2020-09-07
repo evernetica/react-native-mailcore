@@ -420,6 +420,7 @@ public class MailClient {
                         mailData.putString("subject", message.header().subject());
                         MessageParser parser = imapFetchParsedContentOperation.parser();
                         mailData.putString("body",parser.htmlBodyRendering());
+                        mailData.putString("plainBody", parser.plainTextBodyRendering(true));
                         WritableMap attachmentsData = Arguments.createMap();
                         List<AbstractPart> attachments = message.attachments();
                         if (!attachments.isEmpty()) {
