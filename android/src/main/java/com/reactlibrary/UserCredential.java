@@ -17,7 +17,11 @@ public class UserCredential {
         this.password = obj.getString("password");
         this.authType = obj.getInt("authType");
         this.accessToken = obj.getString("accessToken");
-        this.connectionType = obj.getString("connectionType");
+        if (obj.hasKey("connectionType")) {
+            this.connectionType = obj.getString("connectionType");
+        } else {
+            this.connectionType = "tls";
+        }
     }
 
     public String getHostname(){
