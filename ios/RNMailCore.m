@@ -661,11 +661,13 @@ RCT_EXPORT_METHOD(getMailsWithContent:(NSDictionary *)obj resolver:(RCTPromiseRe
                     [mails addObject:mail];
                 }
                 
-                
-                NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
-                [result setObject: @"SUCCESS" forKey: @"status"];
-                [result setObject: mails forKey: @"mails"];
-                resolve(result);
+                [self getMailContent:ids folder:folder callback:^(NSMutableArray * emailData) {
+                    NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
+                    [result setObject: @"SUCCESS" forKey: @"status"];
+                    [result setObject: mails forKey: @"mails"];
+                    [result setObject: emailData forKey: @"mail_content"];
+                    resolve(result);
+                }];
             }
         }];
     }
@@ -797,6 +799,7 @@ RCT_EXPORT_METHOD(getMailsThread:(NSDictionary *)obj resolver:(RCTPromiseResolve
                     } else {
                         [mail setObject:[NSString stringWithFormat:@"%d",0] forKey:@"attachments"];
                     }
+                    NSLog(@"%@", mail);
                     [mails addObject:mail];
                 }
             }
@@ -944,7 +947,7 @@ RCT_EXPORT_METHOD(getMailsByRangeWithContent:(NSDictionary *)obj resolver:(RCTPr
     
     // Start operation
     [operation start:^(NSError *error, NSArray *messages, MCOIndexSet *vanishedMessages) {
-        [self parseMessagesWithContent:error messages:messages reject:reject resolve:resolve];
+        [self parseMessagesWithContent:error messages:messages folder: folder reject:reject resolve:resolve];
     }];
 }
 
@@ -1064,14 +1067,14 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
     }
 }
 
-- (void)parseMessagesWithContent:(NSError *)error messages:(NSArray *)messages reject:(RCTPromiseRejectBlock)reject resolve:(RCTPromiseResolveBlock)resolve {
+- (void)parseMessagesWithContent:(NSError *)error messages:(NSArray *)messages folder:(NSString *)folder reject:(RCTPromiseRejectBlock)reject resolve:(RCTPromiseResolveBlock)resolve {
     if(error) {
         reject(@"Error", error.localizedDescription, error);
     } else {
         // Setup dateFormat
         NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
         [dateFormat setDateFormat:@"yyyy-MM-dd HH:mm:ss zzz"];
-        
+        NSMutableArray *ids = [NSMutableArray array];
         // Process fetched mails
         NSMutableArray *mails = [[NSMutableArray alloc] init];
         for(MCOIMAPMessage * message in messages) {
@@ -1092,8 +1095,10 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
             NSMutableDictionary *mail = [[NSMutableDictionary alloc] init];
             [mail setObject: headers forKey: @"headers"];
             [mail setObject:[NSString stringWithFormat:@"%d",[message uid]] forKey:@"id"];
+            [ids addObject:[NSNumber numberWithInteger:message.uid]];
             [mail setObject:[NSString stringWithFormat:@"%d",(int)message.flags] forKey:@"flags"];
             [mail setObject:message.header.from.displayName ? : @"" forKey:@"from"];
+            [mail setObject:message.header.from.mailbox ? : @"" forKey:@"from_mailbox"];
             [mail setObject:message.header.subject forKey:@"subject"];
             [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
             if (message.attachments != nil) {
@@ -1105,16 +1110,40 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
             // Append mail to mails result
             [mails addObject:mail];
         }
-        
+        [self getMailContent:ids folder:folder callback:^(NSMutableArray * emailData) {
+            NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
+            [result setObject: @"SUCCESS" forKey: @"status"];
+            [result setObject: mails forKey: @"mails"];
+            [result setObject: emailData forKey: @"mail_content"];
+            resolve(result);
+        }];
         // Return mails
-        NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
-        [result setObject: @"SUCCESS" forKey: @"status"];
-        [result setObject: mails forKey: @"mails"];
-        resolve(result);
     }
 }
 
-
+- (void)getMailContent:(NSArray *)mailIds folder:(NSString *)folder callback:(void (^)(NSMutableArray *)) callback { //MessageBodyCallback
+    NSMutableArray *emailData = [NSMutableArray array];
+    if (mailIds.count != 0) {
+        for (NSNumber* mailId in mailIds) {
+            MCOIMAPFetchContentOperation *operation = [_imapSession fetchMessageOperationWithFolder:folder uid:[mailId intValue] urgent:YES];
+            [operation start:^(NSError * __nullable error, NSData * messageData) {
+                if (error == nil) {
+                    MCOMessageParser * parser = [MCOMessageParser messageParserWithData:messageData];
+                    NSString * email = [parser plainTextRendering];
+                    NSMutableDictionary * data = [NSMutableDictionary dictionary];
+                    [data setObject:[NSString stringWithFormat:@"%d",[mailId intValue]] forKey:@"id"];
+                    [data setObject:email forKey:@"content"];
+                    [emailData addObject:data];
+                    if (mailIds.lastObject == mailId) {
+                        callback(emailData);
+                    }
+                }
+            }];
+        };
+    } else {
+        callback(emailData);
+    }
+}
 
 - (instancetype)initSmtp:(MCOSMTPSession *)smtpObject {
     self = [super init];
