@@ -499,6 +499,7 @@ RCT_EXPORT_METHOD(getMails:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)
                 NSMutableArray *mails = [[NSMutableArray alloc] init];
                 NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
                 [dateFormat setDateFormat:@"yyyy-MM-dd HH:mm:ss zzz"];
+                NSMutableArray *ids = [NSMutableArray array];
                 
                 for(MCOIMAPMessage * message in messages) {
                     NSMutableDictionary *mail = [[NSMutableDictionary alloc] init];
@@ -516,10 +517,12 @@ RCT_EXPORT_METHOD(getMails:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)
                     [mail setObject: headers forKey: @"headers"];
                     
                     [mail setObject:[NSString stringWithFormat:@"%d",[message uid]] forKey:@"id"];
+                    [ids addObject:[NSNumber numberWithInteger:[message uid]]];
                     int flags = message.flags;
                     [mail setObject:[NSString stringWithFormat:@"%d",flags] forKey:@"flags"];
-                    [mail setObject:message.header.from.displayName ? : @"" forKey:@"from"];
+                    [mail setObject:message.header.from.displayName ?: @"" forKey:@"from"];
                     [mail setObject:message.header.subject forKey:@"subject"];
+                    [mail setObject:message.header.from.mailbox ?: @"" forKey:@"from_mailbox" ];
                     [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
                     if (message.attachments != nil) {
                         [mail setObject:[NSString stringWithFormat:@"%lu", message.attachments.count] forKey:@"attachments"];
@@ -528,6 +531,7 @@ RCT_EXPORT_METHOD(getMails:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)
                     }
                     [mails addObject:mail];
                 }
+                
                 
                 NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
                 [result setObject: @"SUCCESS" forKey: @"status"];
@@ -600,7 +604,134 @@ RCT_EXPORT_METHOD(getMails:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)
     }
 }
 
-
+RCT_EXPORT_METHOD(getMailsWithContent:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSString *folder = [RCTConvert NSString:obj[@"folder"]];
+    int requestKind = [RCTConvert int:obj[@"requestKind"]];
+    NSString *lastUId = [RCTConvert NSString:obj[@"threadId"] ? : nil];
+    if(lastUId == nil) {
+        MCOIndexSet *uids = [MCOIndexSet indexSetWithRange:MCORangeMake(1, UINT64_MAX)];
+        MCOIMAPFetchMessagesOperation * fetchMessagesOperationWithFolderOperation = [_imapSession fetchMessagesOperationWithFolder:folder
+                                                                                                                      requestKind:requestKind uids:uids];
+        
+        NSArray *extraHeadersRequest = [RCTConvert NSArray:obj[@"headers"]];
+        if (extraHeadersRequest != nil && extraHeadersRequest.count > 0) {
+            [fetchMessagesOperationWithFolderOperation setExtraHeaders:extraHeadersRequest];
+        }
+        
+        [fetchMessagesOperationWithFolderOperation start:^(NSError * error, NSArray * messages, MCOIndexSet * vanishedMessages) {
+            if(error) {
+                reject(@"Error", error.localizedDescription, error);
+            } else {
+                
+                NSMutableArray *mails = [[NSMutableArray alloc] init];
+                NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
+                [dateFormat setDateFormat:@"yyyy-MM-dd HH:mm:ss zzz"];
+                NSMutableArray *ids = [NSMutableArray array];
+                
+                for(MCOIMAPMessage * message in messages) {
+                    NSMutableDictionary *mail = [[NSMutableDictionary alloc] init];
+                    
+                    NSMutableDictionary *headers = [[NSMutableDictionary alloc] init];
+                    NSArray *extraHeaderNames = [message.header allExtraHeadersNames];
+                    
+                    [headers setObject:[NSString stringWithFormat:@"%llu", message.gmailMessageID] forKey:@"gmailMessageID"];
+                    [headers setObject:[NSString stringWithFormat:@"%llu", message.gmailThreadID] forKey:@"gmailThreadID"];
+                    if (extraHeaderNames != nil && extraHeaderNames.count > 0){
+                        for(NSString *headerKey in extraHeaderNames) {
+                            [headers setObject:[message.header extraHeaderValueForName:headerKey] forKey:headerKey];
+                        }
+                    }
+                    [mail setObject: headers forKey: @"headers"];
+                    
+                    [mail setObject:[NSString stringWithFormat:@"%d",[message uid]] forKey:@"id"];
+                    [ids addObject:[NSNumber numberWithInteger:[message uid]]];
+                    int flags = message.flags;
+                    [mail setObject:[NSString stringWithFormat:@"%d",flags] forKey:@"flags"];
+                    [mail setObject:message.header.from.displayName ?: @"" forKey:@"from"];
+                    [mail setObject:message.header.subject forKey:@"subject"];
+                    [mail setObject:message.header.from.mailbox ?: @"" forKey:@"from_mailbox" ];
+                    [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
+                    if (message.attachments != nil) {
+                        [mail setObject:[NSString stringWithFormat:@"%lu", message.attachments.count] forKey:@"attachments"];
+                    } else {
+                        [mail setObject:[NSString stringWithFormat:@"%d",0] forKey:@"attachments"];
+                    }
+                    [mails addObject:mail];
+                }
+                
+                
+                NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
+                [result setObject: @"SUCCESS" forKey: @"status"];
+                [result setObject: mails forKey: @"mails"];
+                resolve(result);
+            }
+        }];
+    }
+    else
+    {
+        long *testLong = [lastUId longLongValue];
+        MCOIMAPSearchOperation *op = [_imapSession searchExpressionOperationWithFolder:folder expression:[MCOIMAPSearchExpression searchGmailThreadID:testLong]];
+        [op start:^(NSError * _Nullable error, MCOIndexSet * _Nullable searchResult) {
+            if(error) {
+                reject(@"Error", error.localizedDescription, error);
+            }
+            
+            MCOIMAPSearchOperation *uids = searchResult;
+            MCOIMAPFetchMessagesOperation * fetchMessagesOperationWithFolderOperation = [_imapSession fetchMessagesOperationWithFolder:folder
+                                                                                                                          requestKind:requestKind uids:uids];
+            [fetchMessagesOperationWithFolderOperation start:^(NSError * error, NSArray * messages, MCOIndexSet * vanishedMessages) {
+                if(error) {
+                    reject(@"Error", error.localizedDescription, error);
+                } else {
+                    
+                    NSMutableArray *mails = [[NSMutableArray alloc] init];
+                    NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
+                    [dateFormat setDateFormat:@"yyyy-MM-dd HH:mm:ss zzz"];
+                    
+                    for(MCOIMAPMessage * message in messages) {
+                        NSMutableDictionary *mail = [[NSMutableDictionary alloc] init];
+                        
+                        NSMutableDictionary *headers = [[NSMutableDictionary alloc] init];
+                        NSArray *extraHeaderNames = [message.header allExtraHeadersNames];
+                        NSMutableDictionary *headerGmailId = [[NSMutableDictionary alloc] init];
+                        [headers setObject:[NSString stringWithFormat:@"%llu", message.gmailMessageID] forKey:@"gmailMessageID"];
+                        [headers setObject:[NSString stringWithFormat:@"%llu", message.gmailThreadID] forKey:@"gmailThreadID"];
+                        if (extraHeaderNames != nil && extraHeaderNames.count > 0){
+                            for(NSString *headerKey in extraHeaderNames) {
+                                
+                                [headers setObject:[message.header extraHeaderValueForName:headerKey] forKey:headerKey];
+                                
+                            }
+                        }
+                        [mail setObject: headers forKey: @"headers"];
+                        
+                        [mail setObject:[NSString stringWithFormat:@"%d",[message uid]] forKey:@"id"];
+                        int flags = message.flags;
+                        [mail setObject:[NSString stringWithFormat:@"%d",flags] forKey:@"flags"];
+                        [mail setObject:message.header.from.displayName ? : @"" forKey:@"from"];
+                        [mail setObject:message.header.subject forKey:@"subject"];
+                        [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
+                        if (message.attachments != nil) {
+                            [mail setObject:[NSString stringWithFormat:@"%lu", message.attachments.count] forKey:@"attachments"];
+                        } else {
+                            [mail setObject:[NSString stringWithFormat:@"%d",0] forKey:@"attachments"];
+                        }
+                        [mails addObject:mail];
+                    }
+                    
+                    NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
+                    [result setObject: @"SUCCESS" forKey: @"status"];
+                    [result setObject: mails forKey: @"mails"];
+                    resolve(result);
+                }
+            }];
+            
+        }];
+        
+    }
+}
 
 RCT_EXPORT_METHOD(getMailsThread:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -787,6 +918,37 @@ RCT_EXPORT_METHOD(getMailsByRange:(NSDictionary *)obj resolver:(RCTPromiseResolv
     }];
 }
 
+RCT_EXPORT_METHOD(getMailsByRangeWithContent:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    // HOW TO USE:
+    // https://github.com/MailCore/mailcore2/blob/aaddeaf20e520d66d8a9821fde9fb09ed77d4526/example/ios/iOS%20UI%20Test/iOS%20UI%20Test/MasterViewController.m#L190
+    
+    // Get arguments
+    NSString *folder = [RCTConvert NSString:obj[@"folder"]];
+    int requestKind = [RCTConvert int:obj[@"requestKind"]];
+    int from = [RCTConvert int:obj[@"from"]];
+    int length = [RCTConvert int:obj[@"length"]];;
+    
+    // Build operation
+    MCOIndexSet *fetchRange = [MCOIndexSet indexSetWithRange:MCORangeMake(from, length)];
+    MCOIMAPFetchMessagesOperation *operation = [_imapSession
+                                                fetchMessagesByNumberOperationWithFolder:folder
+                                                requestKind:requestKind
+                                                numbers:fetchRange];
+    
+    NSArray *extraHeadersRequest = [RCTConvert NSArray:obj[@"headers"]];
+    if (extraHeadersRequest != nil && extraHeadersRequest.count > 0) {
+        [operation setExtraHeaders:extraHeadersRequest];
+    }
+    
+    // Start operation
+    [operation start:^(NSError *error, NSArray *messages, MCOIndexSet *vanishedMessages) {
+        [self parseMessagesWithContent:error messages:messages reject:reject resolve:resolve];
+    }];
+}
+
+
 RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
@@ -901,6 +1063,57 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
         resolve(result);
     }
 }
+
+- (void)parseMessagesWithContent:(NSError *)error messages:(NSArray *)messages reject:(RCTPromiseRejectBlock)reject resolve:(RCTPromiseResolveBlock)resolve {
+    if(error) {
+        reject(@"Error", error.localizedDescription, error);
+    } else {
+        // Setup dateFormat
+        NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
+        [dateFormat setDateFormat:@"yyyy-MM-dd HH:mm:ss zzz"];
+        
+        // Process fetched mails
+        NSMutableArray *mails = [[NSMutableArray alloc] init];
+        for(MCOIMAPMessage * message in messages) {
+            
+            // Process fetched headers from mail
+            NSMutableDictionary *headers = [[NSMutableDictionary alloc] init];
+            [headers setObject:[NSString stringWithFormat:@"%llu", message.gmailMessageID] forKey:@"gmailMessageID"];
+            [headers setObject:[NSString stringWithFormat:@"%llu", message.gmailThreadID] forKey:@"gmailThreadID"];
+            
+            NSArray *extraHeaderNames = [message.header allExtraHeadersNames];
+            if (extraHeaderNames != nil && extraHeaderNames.count > 0){
+                for(NSString *headerKey in extraHeaderNames) {
+                    [headers setObject:[message.header extraHeaderValueForName:headerKey] forKey:headerKey];
+                }
+            }
+            
+            // Process fetched data from mail
+            NSMutableDictionary *mail = [[NSMutableDictionary alloc] init];
+            [mail setObject: headers forKey: @"headers"];
+            [mail setObject:[NSString stringWithFormat:@"%d",[message uid]] forKey:@"id"];
+            [mail setObject:[NSString stringWithFormat:@"%d",(int)message.flags] forKey:@"flags"];
+            [mail setObject:message.header.from.displayName ? : @"" forKey:@"from"];
+            [mail setObject:message.header.subject forKey:@"subject"];
+            [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
+            if (message.attachments != nil) {
+                [mail setObject:[NSString stringWithFormat:@"%lu", message.attachments.count] forKey:@"attachments"];
+            } else {
+                [mail setObject:[NSString stringWithFormat:@"%d",0] forKey:@"attachments"];
+            }
+            
+            // Append mail to mails result
+            [mails addObject:mail];
+        }
+        
+        // Return mails
+        NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
+        [result setObject: @"SUCCESS" forKey: @"status"];
+        [result setObject: mails forKey: @"mails"];
+        resolve(result);
+    }
+}
+
 
 
 - (instancetype)initSmtp:(MCOSMTPSession *)smtpObject {
