@@ -170,7 +170,7 @@ public class MailClient {
                 Address ccAddress = new Address();
                 ccAddress.setDisplayName(ccName);
                 ccAddress.setMailbox(ccMail);
-                ccAddressList.add(ccAddress);
+                if(!ccAddress.mailbox().isEmpty()) ccAddressList.add(ccAddress);
             }
             messageHeader.setCc(ccAddressList);
         }
@@ -185,7 +185,7 @@ public class MailClient {
                 Address bccAddress = new Address();
                 bccAddress.setDisplayName(bccName);
                 bccAddress.setMailbox(bccMail);
-                bccAddressList.add(bccAddress);
+                if(!bccAddress.mailbox().isEmpty()) bccAddressList.add(bccAddress);
             }
             messageHeader.setBcc(bccAddressList);
         }
@@ -241,8 +241,8 @@ public class MailClient {
 
         final ArrayList<Address> allRecipients = new ArrayList<>();
         allRecipients.addAll(toAddressList);
-        allRecipients.addAll(ccAddressList);
-        allRecipients.addAll(bccAddressList);
+        if(!ccAddressList.isEmpty()) allRecipients.addAll(ccAddressList);
+        if(!bccAddressList.isEmpty()) allRecipients.addAll(bccAddressList);
 
         if (obj.isNull("original_id")) {
 
