@@ -161,6 +161,16 @@ public class RNMailCoreModule extends ReactContextBaseJavaModule {
     }
 
   @ReactMethod
+  public void getMailsWithContent(final ReadableMap obj, final Promise promise) {
+    getCurrentActivity().runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+        mailClient.getMailsWithContent(obj, promise);
+      }
+    });
+  }
+
+  @ReactMethod
   public void getMails(final ReadableMap obj, final Promise promise) {
     getCurrentActivity().runOnUiThread(new Runnable() {
       @Override
@@ -186,6 +196,16 @@ public class RNMailCoreModule extends ReactContextBaseJavaModule {
       @Override
       public void run() {
         mailClient.statusFolder(obj,promise);
+      }
+    });
+  }
+
+  @ReactMethod
+  public void getMailsByRangeWithContent(final ReadableMap obj, final Promise promise) {
+    getCurrentActivity().runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+        mailClient.getMailsByRangeWithContent(obj, promise);
       }
     });
   }

@@ -2,9 +2,6 @@ package com.reactlibrary;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
-import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableArray;
@@ -37,8 +34,6 @@ import com.libmailcore.IMAPFetchParsedContentOperation;
 import com.libmailcore.IMAPFolder;
 import com.libmailcore.MessageFlag;
 import com.libmailcore.IMAPSearchOperation;
-import com.libmailcore.IMAPFetchMessagesOperation;
-import com.libmailcore.IMAPFetchParsedContentOperation;
 import com.libmailcore.MessageParser;
 import com.libmailcore.IMAPMessage;
 
@@ -53,29 +48,23 @@ import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Arrays;
 import java.util.ListIterator;
-import java.util.Map;
 
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.net.Uri;
 import android.util.Base64;
-
-import static com.libmailcore.IMAPMessagesRequestKind.IMAPMessagesRequestKindFlags;
-import static com.libmailcore.IMAPMessagesRequestKind.IMAPMessagesRequestKindHeaderSubject;
-import static com.libmailcore.IMAPMessagesRequestKind.IMAPMessagesRequestKindHeaders;
-import static com.libmailcore.IMAPMessagesRequestKind.IMAPMessagesRequestKindInternalDate;
-import static com.libmailcore.IMAPMessagesRequestKind.IMAPMessagesRequestKindStructure;
+import android.util.Log;
+import android.util.Pair;
 
 public class MailClient {
 
     public SMTPSession smtpSession;
     public IMAPSession imapSession;
 
-    public void initIMAPSession(UserCredential userCredential,final Promise promise){
+    public void initIMAPSession(UserCredential userCredential, final Promise promise) {
         imapSession = new IMAPSession();
         imapSession.setHostname(userCredential.getHostname());
         imapSession.setPort(userCredential.getPort());
@@ -89,7 +78,7 @@ public class MailClient {
             imapSession.setPassword(userCredential.getPassword());
         }
         imapSession.setUsername(userCredential.getUsername());
-        
+
         IMAPOperation imapOperation = this.imapSession.checkAccountOperation();
         imapOperation.start(new OperationCallback() {
             @Override
@@ -98,6 +87,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -105,7 +95,7 @@ public class MailClient {
         });
     }
 
-    public void initSMTPSession(UserCredential userCredential,final Promise promise){
+    public void initSMTPSession(UserCredential userCredential, final Promise promise) {
         smtpSession = new SMTPSession();
         smtpSession.setHostname(userCredential.getHostname());
         smtpSession.setPort(userCredential.getPort());
@@ -131,6 +121,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -278,61 +269,68 @@ public class MailClient {
             currentActivity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-            long original_id = (long) obj.getInt("original_id");
-            // Long original_id = ((Double)obj.getDouble("original_id")).longValue();
-            String original_folder = obj.getString("original_folder");
-            final IMAPFetchContentOperation fetchOriginalMessageOperation = imapSession.fetchMessageByUIDOperation(original_folder, original_id);
-            currentActivity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    fetchOriginalMessageOperation.start(new OperationCallback() {
+                    long original_id = (long) obj.getInt("original_id");
+                    // Long original_id = ((Double)obj.getDouble("original_id")).longValue();
+                    String original_folder = obj.getString("original_folder");
+                    final IMAPFetchContentOperation fetchOriginalMessageOperation = imapSession.fetchMessageByUIDOperation(original_folder, original_id);
+                    currentActivity.runOnUiThread(new Runnable() {
                         @Override
-                        public void succeeded() {
-                            MessageParser messageParser = MessageParser.messageParserWithData(fetchOriginalMessageOperation.data());
-
-                            // https://github.com/MailCore/mailcore2/blob/master/src/core/abstract/MCMessageHeader.cpp#L1197
-                            if (messageParser.header().messageID() != null) {
-                                messageBuilder.header().setInReplyTo(new ArrayList<>(Arrays.asList(messageParser.header().messageID())));
-                            }
-
-                            if(messageParser.header().references() != null) {
-                                ArrayList<String> newReferences = new ArrayList<>(messageParser.header().references());
-                                if (messageParser.header().messageID() != null) {
-                                    newReferences.add(messageParser.header().messageID());
-                                }
-                                messageBuilder.header().setReferences(newReferences);
-                            }
-
-                            // set original attachments if they were any left
-                            if (obj.hasKey("attachments")) {
-                                ReadableArray attachments = obj.getArray("attachments");
-
-                                for (int i = 0; i < attachments.size(); i++) {
-                                    ReadableMap attachment = attachments.getMap(i);
-
-                                    if (attachment.getString("uniqueId") == null)
-                                        continue;
-
-                                    for (AbstractPart abstractPart : messageParser.attachments()) {
-                                        if (abstractPart instanceof Attachment) {
-                                            Attachment original_attachment = (Attachment) abstractPart;
-
-                                            if (!original_attachment.uniqueID().equals(attachment.getString("uniqueId")))
-                                                continue;
-
-                                            messageBuilder.addAttachment(original_attachment);
-                                        }
-                                    }
-                                }
-                            }
-
-                            final SMTPOperation smtpOperation = smtpSession.sendMessageOperation(fromAddress, allRecipients, messageBuilder.data());
-                            smtpOperation.start(new OperationCallback() {
+                        public void run() {
+                            fetchOriginalMessageOperation.start(new OperationCallback() {
                                 @Override
                                 public void succeeded() {
-                                    WritableMap result = Arguments.createMap();
-                                    result.putString("status", "SUCCESS");
-                                    promise.resolve(result);
+                                    MessageParser messageParser = MessageParser.messageParserWithData(fetchOriginalMessageOperation.data());
+
+                                    // https://github.com/MailCore/mailcore2/blob/master/src/core/abstract/MCMessageHeader.cpp#L1197
+                                    if (messageParser.header().messageID() != null) {
+                                        messageBuilder.header().setInReplyTo(new ArrayList<>(Arrays.asList(messageParser.header().messageID())));
+                                    }
+
+                                    if (messageParser.header().references() != null) {
+                                        ArrayList<String> newReferences = new ArrayList<>(messageParser.header().references());
+                                        if (messageParser.header().messageID() != null) {
+                                            newReferences.add(messageParser.header().messageID());
+                                        }
+                                        messageBuilder.header().setReferences(newReferences);
+                                    }
+
+                                    // set original attachments if they were any left
+                                    if (obj.hasKey("attachments")) {
+                                        ReadableArray attachments = obj.getArray("attachments");
+
+                                        for (int i = 0; i < attachments.size(); i++) {
+                                            ReadableMap attachment = attachments.getMap(i);
+
+                                            if (attachment.getString("uniqueId") == null)
+                                                continue;
+
+                                            for (AbstractPart abstractPart : messageParser.attachments()) {
+                                                if (abstractPart instanceof Attachment) {
+                                                    Attachment original_attachment = (Attachment) abstractPart;
+
+                                                    if (!original_attachment.uniqueID().equals(attachment.getString("uniqueId")))
+                                                        continue;
+
+                                                    messageBuilder.addAttachment(original_attachment);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    final SMTPOperation smtpOperation = smtpSession.sendMessageOperation(fromAddress, allRecipients, messageBuilder.data());
+                                    smtpOperation.start(new OperationCallback() {
+                                        @Override
+                                        public void succeeded() {
+                                            WritableMap result = Arguments.createMap();
+                                            result.putString("status", "SUCCESS");
+                                            promise.resolve(result);
+                                        }
+
+                                        @Override
+                                        public void failed(MailException e) {
+                                            promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                                        }
+                                    });
                                 }
 
                                 @Override
@@ -341,21 +339,14 @@ public class MailClient {
                                 }
                             });
                         }
-
-                        @Override
-                        public void failed(MailException e) {
-                            promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-                        }
                     });
-                }
-            });
                 }
             });
         }
 
     }
 
-    public void getMail(final ReadableMap obj,final Promise promise) {
+    public void getMail(final ReadableMap obj, final Promise promise) {
         final String folder = obj.getString("folder");
         int messageId = obj.getInt("messageId");
         int requestKind = obj.getInt("requestKind");
@@ -392,7 +383,7 @@ public class MailClient {
                         mailData.putInt("flags", message.flags());
                         fromData.putString("displayName", message.header().from().displayName());
                         mailData.putMap("from", fromData);
-                        if(message.header().cc() != null) {
+                        if (message.header().cc() != null) {
                             WritableMap toData = Arguments.createMap();
                             ListIterator<Address> toIterator = message.header().to().listIterator();
                             while (toIterator.hasNext()) {
@@ -401,7 +392,7 @@ public class MailClient {
                             }
                             mailData.putMap("to", toData);
                         }
-                        if(message.header().cc() != null) {
+                        if (message.header().cc() != null) {
                             WritableMap ccData = Arguments.createMap();
                             ListIterator<Address> ccIterator = message.header().cc().listIterator();
                             while (ccIterator.hasNext()) {
@@ -410,7 +401,7 @@ public class MailClient {
                             }
                             mailData.putMap("cc", ccData);
                         }
-                        if(message.header().bcc() != null) {
+                        if (message.header().bcc() != null) {
                             WritableMap bccData = Arguments.createMap();
                             ListIterator<Address> bccIterator = message.header().bcc().listIterator();
                             while (bccIterator.hasNext()) {
@@ -421,13 +412,13 @@ public class MailClient {
                         }
                         mailData.putString("subject", message.header().subject());
                         MessageParser parser = imapFetchParsedContentOperation.parser();
-                        mailData.putString("body",parser.htmlBodyRendering());
+                        mailData.putString("body", parser.htmlBodyRendering());
                         mailData.putString("plainBody", parser.plainTextBodyRendering(true));
 
                         WritableMap attachmentsData = Arguments.createMap();
                         List<AbstractPart> attachments = message.attachments();
                         if (!attachments.isEmpty()) {
-                            for (AbstractPart attachment: message.attachments()) {
+                            for (AbstractPart attachment : message.attachments()) {
                                 IMAPPart part = (IMAPPart) attachment;
                                 WritableMap attachmentData = Arguments.createMap();
                                 attachmentData.putString("filename", attachment.filename());
@@ -447,7 +438,7 @@ public class MailClient {
                             WritableMap attachmentsDataInline = Arguments.createMap();
                             List<AbstractPart> attachmentsInline = message.htmlInlineAttachments();
 
-                            for (AbstractPart attachment: attachmentsInline) {
+                            for (AbstractPart attachment : attachmentsInline) {
                                 IMAPPart part = (IMAPPart) attachment;
                                 WritableMap attachmentData = Arguments.createMap();
                                 attachmentData.putString("filename", attachment.filename());
@@ -466,26 +457,28 @@ public class MailClient {
                         }
 
                         // Process fetched headers from mail
-            WritableMap headerData = Arguments.createMap();
-            headerData.putString("gmailMessageID", Long.toString(message.gmailMessageID()));
-            headerData.putString("gmailThreadID", Long.toString(message.gmailThreadID()));
+                        WritableMap headerData = Arguments.createMap();
+                        headerData.putString("gmailMessageID", Long.toString(message.gmailMessageID()));
+                        headerData.putString("gmailThreadID", Long.toString(message.gmailThreadID()));
 
-            ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
-            while (headerIterator.hasNext()) {
-                String headerKey = headerIterator.next();
-                headerData.putString(headerKey, message.header().extraHeaderValueForName(headerKey));
-            }
+                        ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
+                        while (headerIterator.hasNext()) {
+                            String headerKey = headerIterator.next();
+                            headerData.putString(headerKey, message.header().extraHeaderValueForName(headerKey));
+                        }
                         mailData.putMap("headers", headerData);
 
                         mailData.putString("status", "success");
                         promise.resolve(mailData);
                     }
+
                     @Override
                     public void failed(MailException e) {
                         promise.reject(String.valueOf(e.errorCode()), e.getMessage());
                     }
                 });
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -493,7 +486,7 @@ public class MailClient {
         });
     }
 
-    public void createFolderLabel(final ReadableMap obj,final Promise promise) {
+    public void createFolderLabel(final ReadableMap obj, final Promise promise) {
         IMAPOperation imapOperation = this.imapSession.createFolderOperation(obj.getString("folder"));
         imapOperation.start(new OperationCallback() {
             @Override
@@ -502,6 +495,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -509,8 +503,8 @@ public class MailClient {
         });
     }
 
-    public void renameFolderLabel(final ReadableMap obj,final Promise promise) {
-        IMAPOperation imapOperation = this.imapSession.renameFolderOperation(obj.getString("folderOldName"),obj.getString("folderNewName"));
+    public void renameFolderLabel(final ReadableMap obj, final Promise promise) {
+        IMAPOperation imapOperation = this.imapSession.renameFolderOperation(obj.getString("folderOldName"), obj.getString("folderNewName"));
         imapOperation.start(new OperationCallback() {
             @Override
             public void succeeded() {
@@ -518,6 +512,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -525,7 +520,7 @@ public class MailClient {
         });
     }
 
-    public void deleteFolderLabel(final ReadableMap obj,final Promise promise) {
+    public void deleteFolderLabel(final ReadableMap obj, final Promise promise) {
         IMAPOperation imapOperation = this.imapSession.deleteFolderOperation(obj.getString("folder"));
         imapOperation.start(new OperationCallback() {
             @Override
@@ -534,6 +529,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -552,13 +548,14 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 for (IMAPFolder folder : folders) {
                     WritableMap mapFolder = Arguments.createMap();
-                    mapFolder.putString("path",folder.path());
+                    mapFolder.putString("path", folder.path());
                     mapFolder.putInt("flags", folder.flags());
                     a.pushMap(mapFolder);
                 }
-                result.putArray("folders",a);
+                result.putArray("folders", a);
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -570,11 +567,12 @@ public class MailClient {
         String from = obj.getString("folderFrom");
         int messageId = obj.getInt("messageId");
         String to = obj.getString("folderTo");
-        IMAPOperation imapOperation = imapSession.copyMessagesOperation(from,IndexSet.indexSetWithIndex(messageId),to);
+        IMAPOperation imapOperation = imapSession.copyMessagesOperation(from, IndexSet.indexSetWithIndex(messageId), to);
         imapOperation.start(new OperationCallback() {
             @Override
             public void succeeded() {
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -584,17 +582,18 @@ public class MailClient {
         WritableMap permantDeleteRequest = Arguments.createMap();
         permantDeleteRequest.putString("folder", from);
         permantDeleteRequest.putInt("messageId", messageId);
-        permantDelete(permantDeleteRequest,promise);
+        permantDelete(permantDeleteRequest, promise);
     }
 
     public void permantDelete(final ReadableMap obj, final Promise promise) {
         String folder = obj.getString("folder");
         int messageId = obj.getInt("messageId");
-        IMAPOperation imapOperation = imapSession.storeFlagsByUIDOperation(folder,IndexSet.indexSetWithIndex(messageId), 0, MessageFlag.MessageFlagDeleted);
+        IMAPOperation imapOperation = imapSession.storeFlagsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), 0, MessageFlag.MessageFlagDeleted);
         imapOperation.start(new OperationCallback() {
             @Override
             public void succeeded() {
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -608,6 +607,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -632,6 +632,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -645,7 +646,7 @@ public class MailClient {
         int flag = obj.getInt("flagsRequestKind");
         int messageFlag = obj.getInt("messageFlag");
 
-        IMAPOperation imapOperation = imapSession.storeFlagsByUIDOperation(folder,IndexSet.indexSetWithIndex(messageId), flag, messageFlag);
+        IMAPOperation imapOperation = imapSession.storeFlagsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), flag, messageFlag);
         imapOperation.start(new OperationCallback() {
             @Override
             public void succeeded() {
@@ -653,6 +654,7 @@ public class MailClient {
                 result.putString("status", "SUCCESS");
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -664,9 +666,7 @@ public class MailClient {
         final String folder = obj.getString("folder");
         final int requestKind = obj.getInt("requestKind");
         final Long threadId = obj.hasKey("threadId") ? Long.parseLong(obj.getString("threadId")) : null;
-
-
-        if(threadId == null) {
+        if (threadId == null) {
             IndexSet indexSet = IndexSet.indexSetWithRange(new Range(1, Long.MAX_VALUE));
             final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByUIDOperation(folder, requestKind, indexSet);
 
@@ -689,6 +689,7 @@ public class MailClient {
                         promise.reject("Mails not found!");
                         return;
                     }
+                    ArrayList<Long> ids = new ArrayList();
                     for (final IMAPMessage message : messages) {
                         final WritableMap mailData = Arguments.createMap();
                         WritableMap headerData = Arguments.createMap();
@@ -699,15 +700,18 @@ public class MailClient {
                         }
                         mailData.putMap("headers", headerData);
                         Long mailId = message.uid();
+                        ids.add(mailId);
                         mailData.putInt("id", mailId.intValue());
                         mailData.putInt("flags", message.flags());
                         mailData.putString("from", message.header().from().displayName());
+                        mailData.putString("from_mailbox", message.header().from().mailbox());
                         mailData.putString("subject", message.header().subject());
                         mailData.putString("date", message.header().date().toString());
                         mailData.putInt("attachments", message.attachments().size());
-
+                        message.requiredPartsForRendering();
                         mails.pushMap(mailData);
                     }
+
                     result.putString("status", "SUCCESS");
                     result.putArray("mails", mails);
                     promise.resolve(result);
@@ -720,7 +724,7 @@ public class MailClient {
             });
         } else {
 
-            final IMAPSearchOperation imapOperation = imapSession.searchOperation(folder,IMAPSearchExpression.searchGmailThreadID(threadId));
+            final IMAPSearchOperation imapOperation = imapSession.searchOperation(folder, IMAPSearchExpression.searchGmailThreadID(threadId));
             imapOperation.start(new OperationCallback() {
                 @Override
                 public void succeeded() {
@@ -776,6 +780,7 @@ public class MailClient {
                     });
 
                 }
+
                 @Override
                 public void failed(MailException e) {
 
@@ -784,12 +789,183 @@ public class MailClient {
         }
     }
 
+    public void getMailsWithContent(final ReadableMap obj, final Promise promise) {
+        final String folder = obj.getString("folder");
+        final int requestKind = obj.getInt("requestKind");
+        final Long threadId = obj.hasKey("threadId") ? Long.parseLong(obj.getString("threadId")) : null;
+
+        if (threadId == null) {
+            IndexSet indexSet = IndexSet.indexSetWithRange(new Range(1, Long.MAX_VALUE));
+            final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByUIDOperation(folder, requestKind, indexSet);
+
+            if (obj.hasKey("headers")) {
+                ReadableArray headersArray = obj.getArray("headers");
+                List<String> extraHeaders = new ArrayList<>();
+                for (int i = 0; headersArray.size() > i; i++) {
+                    extraHeaders.add(headersArray.getString(i));
+                }
+                messagesOperation.setExtraHeaders(extraHeaders);
+            }
+
+            final WritableMap result = Arguments.createMap();
+            final WritableArray mails = Arguments.createArray();
+            final WritableArray mailsContent = Arguments.createArray();
+            messagesOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    List<IMAPMessage> messages = messagesOperation.messages();
+                    if (messages.isEmpty()) {
+                        promise.reject("Mails not found!");
+                        return;
+                    }
+                    ArrayList<Long> ids = new ArrayList();
+                    for (final IMAPMessage message : messages) {
+                        final WritableMap mailData = Arguments.createMap();
+                        WritableMap headerData = Arguments.createMap();
+                        ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
+                        while (headerIterator.hasNext()) {
+                            String headerKey = headerIterator.next();
+                            headerData.putString(headerKey, message.header().extraHeaderValueForName(headerKey));
+                        }
+                        mailData.putMap("headers", headerData);
+                        Long mailId = message.uid();
+                        ids.add(mailId);
+                        mailData.putInt("id", mailId.intValue());
+                        mailData.putInt("flags", message.flags());
+                        mailData.putString("from", message.header().from().displayName());
+                        mailData.putString("from_mailbox", message.header().from().mailbox());
+                        mailData.putString("subject", message.header().subject());
+                        mailData.putString("date", message.header().date().toString());
+                        mailData.putInt("attachments", message.attachments().size());
+                        message.requiredPartsForRendering();
+                        mails.pushMap(mailData);
+                    }
+                    getMailContent(ids, folder, new MessageBodyCallback() {
+                        @Override
+                        public void receivedMessage(ArrayList<Pair<Long, String>> emailData) {
+                            result.putString("status", "SUCCESS");
+                            result.putArray("mails", mails);
+                            for (Pair<Long, String> emailDatum : emailData) {
+                                final WritableMap content = Arguments.createMap();
+                                content.putInt("id", emailDatum.first.intValue());
+                                content.putString("content", emailDatum.second);
+                                mailsContent.pushMap(content);
+                            }
+                            result.putArray("mail_content", mailsContent);
+                            promise.resolve(result);
+                        }
+                    });
+                }
+
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
+        } else {
+
+            final IMAPSearchOperation imapOperation = imapSession.searchOperation(folder, IMAPSearchExpression.searchGmailThreadID(threadId));
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByUIDOperation(folder, requestKind, imapOperation.uids());
+
+                    if (obj.hasKey("headers")) {
+                        ReadableArray headersArray = obj.getArray("headers");
+                        List<String> extraHeaders = new ArrayList<>();
+                        for (int i = 0; headersArray.size() > i; i++) {
+                            extraHeaders.add(headersArray.getString(i));
+                        }
+                        messagesOperation.setExtraHeaders(extraHeaders);
+                    }
+
+                    final WritableMap result = Arguments.createMap();
+                    final WritableArray mails = Arguments.createArray();
+                    messagesOperation.start(new OperationCallback() {
+                        @Override
+                        public void succeeded() {
+                            List<IMAPMessage> messages = messagesOperation.messages();
+                            if (messages.isEmpty()) {
+                                promise.reject("Mails not found!");
+                                return;
+                            }
+                            for (final IMAPMessage message : messages) {
+                                final WritableMap mailData = Arguments.createMap();
+                                WritableMap headerData = Arguments.createMap();
+                                ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
+                                while (headerIterator.hasNext()) {
+                                    String headerKey = headerIterator.next();
+                                    headerData.putString(headerKey, message.header().extraHeaderValueForName(headerKey));
+                                }
+                                mailData.putMap("headers", headerData);
+                                Long mailId = message.uid();
+                                mailData.putInt("id", mailId.intValue());
+                                mailData.putInt("flags", message.flags());
+                                mailData.putString("from", message.header().from().displayName());
+                                mailData.putString("subject", message.header().subject());
+                                mailData.putString("date", message.header().date().toString());
+                                mailData.putInt("attachments", message.attachments().size());
+
+                                mails.pushMap(mailData);
+                            }
+                            result.putString("status", "SUCCESS");
+                            result.putArray("mails", mails);
+                            promise.resolve(result);
+                        }
+
+                        @Override
+                        public void failed(MailException e) {
+                            promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                        }
+                    });
+
+                }
+
+                @Override
+                public void failed(MailException e) {
+
+                }
+            });
+        }
+    }
+
+    interface MessageBodyCallback {
+        void receivedMessage(ArrayList<Pair<Long, String>> emailData);
+    }
+
+    private void getMailContent(final ArrayList<Long> mailId, final String folder, final MessageBodyCallback callback) {
+        final ArrayList<Pair<Long, String>> emailData = new ArrayList();
+        if (!mailId.isEmpty()) {
+            for (final Long id : mailId) {
+                final IMAPFetchContentOperation operation = imapSession.fetchMessageByUIDOperation(folder, id.intValue(), true);
+                operation.start(new OperationCallback() {
+                    @Override
+                    public void succeeded() {
+                        MessageParser parser = MessageParser.messageParserWithData(operation.data());
+                        emailData.add(Pair.create(id, parser.plainTextRendering())); // PLain text here
+                        if (mailId.size() == emailData.size()) {
+                            callback.receivedMessage(emailData);
+                        }
+                    }
+
+                    @Override
+                    public void failed(MailException e) {
+                        Log.d("LogFetch", "Zrada");
+                    }
+                });
+            }
+        } else {
+            callback.receivedMessage(emailData);
+        }
+
+    }
+
 
     public void getMailsThread(final ReadableMap obj, final Promise promise) {
         final String folder = obj.getString("folder");
         int requestKind = obj.getInt("requestKind");
         int lastUId = obj.hasKey("lastUId") ? obj.getInt("lastUId") : 1;
-        IndexSet indexSet = IndexSet.indexSetWithRange(new Range(lastUId,Long.MAX_VALUE));
+        IndexSet indexSet = IndexSet.indexSetWithRange(new Range(lastUId, Long.MAX_VALUE));
         final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByUIDOperation(folder, requestKind, indexSet);
 
         if (obj.hasKey("headers")) {
@@ -813,14 +989,14 @@ public class MailClient {
                     promise.reject("Mails not found!");
                     return;
                 }
-                for (final IMAPMessage message: messages) {
-                    if(!listThreads.contains(message.header().messageID())) {
+                for (final IMAPMessage message : messages) {
+                    if (!listThreads.contains(message.header().messageID())) {
                         final WritableMap mailData = Arguments.createMap();
                         WritableMap headerData = Arguments.createMap();
                         listThreads.add(message.header().messageID());
-                        if(message.header().references() != null) {
+                        if (message.header().references() != null) {
                             listThreads.addAll(message.header().references());
-                            mailData.putInt("thread",message.header().references().size() + 1);
+                            mailData.putInt("thread", message.header().references().size() + 1);
                         }
                         ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
                         headerData.putString("gmailMessageID", Long.toString(message.gmailMessageID()));
@@ -845,6 +1021,7 @@ public class MailClient {
                 result.putArray("mails", mails);
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -859,7 +1036,7 @@ public class MailClient {
         String partID = obj.getString("partID");
         int encoding = obj.getInt("encoding");
         final String folderOutput = obj.getString("folderOutput");
-        final IMAPFetchContentOperation imapOperation = imapSession.fetchMessageAttachmentByUIDOperation(folderId, messageId, partID,encoding,true);
+        final IMAPFetchContentOperation imapOperation = imapSession.fetchMessageAttachmentByUIDOperation(folderId, messageId, partID, encoding, true);
         imapOperation.start(new OperationCallback() {
             @Override
             public void succeeded() {
@@ -869,7 +1046,7 @@ public class MailClient {
                     outputStream = new FileOutputStream(file);
                     outputStream.write(imapOperation.data());
                     outputStream.close();
-                    if(file.canWrite()) {
+                    if (file.canWrite()) {
                         WritableMap result = Arguments.createMap();
                         result.putString("status", "SUCCESS");
                         promise.resolve(result);
@@ -882,6 +1059,7 @@ public class MailClient {
                     promise.reject(e.getMessage());
                 }
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -897,7 +1075,7 @@ public class MailClient {
         int encoding = obj.getInt("encoding");
         final String mimepart = obj.getString("mimepart");
 
-        final IMAPFetchContentOperation imapOperation = imapSession.fetchMessageAttachmentByUIDOperation(folderId, messageId, partID,encoding,true);
+        final IMAPFetchContentOperation imapOperation = imapSession.fetchMessageAttachmentByUIDOperation(folderId, messageId, partID, encoding, true);
         imapOperation.start(new OperationCallback() {
             @Override
             public void succeeded() {
@@ -906,6 +1084,7 @@ public class MailClient {
                 result.putString("data", data);
                 promise.resolve(result);
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -922,9 +1101,9 @@ public class MailClient {
             public void succeeded() {
                 WritableMap result = Arguments.createMap();
                 result.putString("status", "SUCCESS");
-                result.putInt("unseenCount", (int)folderStatusOperation.status().unseenCount());
-                result.putInt("messageCount", (int)folderStatusOperation.status().messageCount());
-                result.putInt("recentCount", (int)folderStatusOperation.status().recentCount());
+                result.putInt("unseenCount", (int) folderStatusOperation.status().unseenCount());
+                result.putInt("messageCount", (int) folderStatusOperation.status().messageCount());
+                result.putInt("recentCount", (int) folderStatusOperation.status().recentCount());
                 promise.resolve(result);
             }
 
@@ -961,6 +1140,39 @@ public class MailClient {
             @Override
             public void succeeded() {
                 parseMessages(messagesOperation.messages(), promise);
+            }
+
+            @Override
+            public void failed(MailException e) {
+                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+            }
+        });
+    }
+    public void getMailsByRangeWithContent(final ReadableMap obj, final Promise promise) {
+        // Get arguments
+        final String folder = obj.getString("folder");
+        final int requestKind = obj.getInt("requestKind");
+        final int from = obj.getInt("from");
+        final int length = obj.getInt("length");
+
+        // Build operation
+        IndexSet indexSet = IndexSet.indexSetWithRange(new Range(from, length));
+        final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByNumberOperation(folder, requestKind, indexSet);
+
+        if (obj.hasKey("headers")) {
+            ReadableArray headersArray = obj.getArray("headers");
+            List<String> extraHeaders = new ArrayList<>();
+            for (int i = 0; headersArray.size() > i; i++) {
+                extraHeaders.add(headersArray.getString(i));
+            }
+            messagesOperation.setExtraHeaders(extraHeaders);
+        }
+
+        // Start operation
+        messagesOperation.start(new OperationCallback() {
+            @Override
+            public void succeeded() {
+                parseMessagesWithContent(messagesOperation.messages(), promise, folder);
             }
 
             @Override
@@ -1011,6 +1223,7 @@ public class MailClient {
                 });
 
             }
+
             @Override
             public void failed(MailException e) {
                 promise.reject(String.valueOf(e.errorCode()), e.getMessage());
@@ -1018,11 +1231,11 @@ public class MailClient {
         });
     }
 
-    private void parseMessages(List<IMAPMessage> messages, Promise promise) {
+    private void parseMessages(List<IMAPMessage> messages, final Promise promise) {
         final WritableMap result = Arguments.createMap();
         final WritableArray mails = Arguments.createArray();
 
-        if (messages == null){
+        if (messages == null) {
             result.putString("status", "SUCCESS");
             result.putArray("mails", mails);
             promise.resolve(result);
@@ -1034,7 +1247,6 @@ public class MailClient {
             WritableMap headerData = Arguments.createMap();
             headerData.putString("gmailMessageID", Long.toString(message.gmailMessageID()));
             headerData.putString("gmailThreadID", Long.toString(message.gmailThreadID()));
-
             ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
             while (headerIterator.hasNext()) {
                 String headerKey = headerIterator.next();
@@ -1053,9 +1265,65 @@ public class MailClient {
 
             mails.pushMap(mailData);
         }
+
         result.putString("status", "SUCCESS");
         result.putArray("mails", mails);
         promise.resolve(result);
+    }
+    private void parseMessagesWithContent(List<IMAPMessage> messages, final Promise promise, String folder) {
+        final WritableMap result = Arguments.createMap();
+        final WritableArray mails = Arguments.createArray();
+        final WritableArray mailsContent = Arguments.createArray();
+
+        if (messages == null) {
+            result.putString("status", "SUCCESS");
+            result.putArray("mails", mails);
+            promise.resolve(result);
+        }
+        ArrayList<Long> ids = new ArrayList();
+
+        for (final IMAPMessage message : messages) {
+
+            // Process fetched headers from mail
+            WritableMap headerData = Arguments.createMap();
+            headerData.putString("gmailMessageID", Long.toString(message.gmailMessageID()));
+            headerData.putString("gmailThreadID", Long.toString(message.gmailThreadID()));
+            ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
+            while (headerIterator.hasNext()) {
+                String headerKey = headerIterator.next();
+                headerData.putString(headerKey, message.header().extraHeaderValueForName(headerKey));
+            }
+
+            // Process fetched data from mail
+            final WritableMap mailData = Arguments.createMap();
+            mailData.putMap("headers", headerData);
+            ids.add(message.uid());
+            mailData.putInt("id", ((Long) message.uid()).intValue());
+            mailData.putInt("flags", message.flags());
+            mailData.putString("from", message.header().from().displayName());
+            mailData.putString("mailbox", message.header().from().mailbox());
+            mailData.putString("subject", message.header().subject());
+            mailData.putString("date", message.header().date().toString());
+            mailData.putInt("attachments", message.attachments().size());
+
+            mails.pushMap(mailData);
+        }
+
+        getMailContent(ids, folder, new MessageBodyCallback() {
+            @Override
+            public void receivedMessage(ArrayList<Pair<Long, String>> emailData) {
+                result.putString("status", "SUCCESS");
+                result.putArray("mails", mails);
+                for (Pair<Long, String> emailDatum : emailData) {
+                    final WritableMap content = Arguments.createMap();
+                    content.putInt("id", emailDatum.first.intValue());
+                    content.putString("content", emailDatum.second);
+                    mailsContent.pushMap(content);
+                }
+                result.putArray("mail_content", mailsContent);
+                promise.resolve(result);
+            }
+        });
     }
 
 }

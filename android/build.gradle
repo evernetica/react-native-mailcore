@@ -30,3 +30,6 @@ dependencies {
     compile 'com.facebook.react:react-native:+'
     compile project(":mailcore2-android-4")
 }
+repositories {
+    mavenCentral()
+}
