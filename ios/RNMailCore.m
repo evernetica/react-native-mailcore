@@ -1106,7 +1106,7 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
             } else {
                 [mail setObject:[NSString stringWithFormat:@"%d",0] forKey:@"attachments"];
             }
-            
+        
             // Append mail to mails result
             [mails addObject:mail];
         }
@@ -1134,7 +1134,7 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
                     [data setObject:[NSString stringWithFormat:@"%d",[mailId intValue]] forKey:@"id"];
                     [data setObject:email forKey:@"content"];
                     [emailData addObject:data];
-                    if (mailIds.lastObject == mailId) {
+                    if (mailIds.count == emailData.count) {
                         callback(emailData);
                     }
                 }
