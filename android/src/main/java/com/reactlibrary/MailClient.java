@@ -474,7 +474,7 @@ public class MailClient {
 
                     @Override
                     public void failed(MailException e) {
-                        promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                        promise.reject("", "");
                     }
                 });
             }
