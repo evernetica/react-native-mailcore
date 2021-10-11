@@ -383,7 +383,7 @@ public class MailClient {
                         mailData.putInt("flags", message.flags());
                         fromData.putString("displayName", message.header().from().displayName());
                         mailData.putMap("from", fromData);
-                        if (message.header().cc() != null) {
+                        if (message.header().to() != null) {
                             WritableMap toData = Arguments.createMap();
                             ListIterator<Address> toIterator = message.header().to().listIterator();
                             while (toIterator.hasNext()) {

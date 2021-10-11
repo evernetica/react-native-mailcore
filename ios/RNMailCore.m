@@ -384,7 +384,7 @@ RCT_EXPORT_METHOD(getMail:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)r
                 [fromData setValue:message.header.from.displayName forKey:@"displayName"];
                 [result setObject:fromData forKey:@"from"];
                 
-                if(message.header.cc != nil) {
+                if(message.header.to != nil) {
                     NSMutableDictionary *toData = [[NSMutableDictionary alloc] init];
                     for(MCOAddress *toAddress in message.header.to) {
                         [toData setValue:[toAddress displayName] forKey:[toAddress mailbox]];
@@ -395,7 +395,11 @@ RCT_EXPORT_METHOD(getMail:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)r
                 if(message.header.cc != nil) {
                     NSMutableDictionary *ccData = [[NSMutableDictionary alloc] init];
                     for(MCOAddress *ccAddress in message.header.cc) {
-                        [ccData setValue:[ccAddress displayName] forKey:[ccAddress mailbox]];
+                        if ([ccAddress displayName] == nil) {
+                            [ccData setValue: @"" forKey:[ccAddress mailbox]];
+                        } else {
+                            [ccData setValue:[ccAddress displayName] forKey:[ccAddress mailbox]];
+                        }
                     }
                     [result setObject:ccData forKey:@"cc"];
                 }
