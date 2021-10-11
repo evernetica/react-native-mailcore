@@ -563,7 +563,7 @@ RCT_EXPORT_METHOD(getMails:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)
                     [mail setObject:[NSString stringWithFormat:@"%d",flags] forKey:@"flags"];
                     [mail setObject:message.header.from.displayName ?: @"" forKey:@"from"];
                     [mail setObject:message.header.subject forKey:@"subject"];
-                    [mail setObject:message.header.from.mailbox ?: @"" forKey:@"from_mailbox" ];
+                    [mail setObject:message.header.from.mailbox ?: @"" forKey:@"fromMailbox" ];
                     [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
                     if (message.attachments != nil) {
                         [mail setObject:[NSString stringWithFormat:@"%lu", message.attachments.count] forKey:@"attachments"];
@@ -692,7 +692,7 @@ RCT_EXPORT_METHOD(getMailsWithContent:(NSDictionary *)obj resolver:(RCTPromiseRe
                     [mail setObject:[NSString stringWithFormat:@"%d",flags] forKey:@"flags"];
                     [mail setObject:message.header.from.displayName ?: @"" forKey:@"from"];
                     [mail setObject:message.header.subject forKey:@"subject"];
-                    [mail setObject:message.header.from.mailbox ?: @"" forKey:@"from_mailbox" ];
+                    [mail setObject:message.header.from.mailbox ?: @"" forKey:@"fromMailbox" ];
                     [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
                     if (message.attachments != nil) {
                         [mail setObject:[NSString stringWithFormat:@"%lu", message.attachments.count] forKey:@"attachments"];
@@ -1088,6 +1088,7 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
             [mail setObject:[NSString stringWithFormat:@"%d",[message uid]] forKey:@"id"];
             [mail setObject:[NSString stringWithFormat:@"%d",(int)message.flags] forKey:@"flags"];
             [mail setObject:message.header.from.displayName ? : @"" forKey:@"from"];
+            [mail setObject:message.header.from.mailbox ?: @"" forKey:@"fromMailbox" ];
             [mail setObject:message.header.subject forKey:@"subject"];
             [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
             if (message.attachments != nil) {
@@ -1139,7 +1140,7 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
             [ids addObject:[NSNumber numberWithInteger:message.uid]];
             [mail setObject:[NSString stringWithFormat:@"%d",(int)message.flags] forKey:@"flags"];
             [mail setObject:message.header.from.displayName ? : @"" forKey:@"from"];
-            [mail setObject:message.header.from.mailbox ? : @"" forKey:@"from_mailbox"];
+            [mail setObject:message.header.from.mailbox ? : @"" forKey:@"fromMailbox"];
             [mail setObject:message.header.subject forKey:@"subject"];
             [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
             if (message.attachments != nil) {

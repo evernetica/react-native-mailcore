@@ -474,6 +474,7 @@ public class MailClient {
 
                     @Override
                     public void failed(MailException e) {
+
                         promise.reject("", "");
                     }
                 });
@@ -704,7 +705,7 @@ public class MailClient {
                         mailData.putInt("id", mailId.intValue());
                         mailData.putInt("flags", message.flags());
                         mailData.putString("from", message.header().from().displayName());
-                        mailData.putString("from_mailbox", message.header().from().mailbox());
+                        mailData.putString("fromMailbox", message.header().from().mailbox());
                         mailData.putString("subject", message.header().subject());
                         mailData.putString("date", message.header().date().toString());
                         mailData.putInt("attachments", message.attachments().size());
@@ -833,7 +834,7 @@ public class MailClient {
                         mailData.putInt("id", mailId.intValue());
                         mailData.putInt("flags", message.flags());
                         mailData.putString("from", message.header().from().displayName());
-                        mailData.putString("from_mailbox", message.header().from().mailbox());
+                        mailData.putString("fromMailbox", message.header().from().mailbox());
                         mailData.putString("subject", message.header().subject());
                         mailData.putString("date", message.header().date().toString());
                         mailData.putInt("attachments", message.attachments().size());
@@ -1259,6 +1260,7 @@ public class MailClient {
             mailData.putInt("id", ((Long) message.uid()).intValue());
             mailData.putInt("flags", message.flags());
             mailData.putString("from", message.header().from().displayName());
+            mailData.putString("fromMailbox", message.header().from().mailbox());
             mailData.putString("subject", message.header().subject());
             mailData.putString("date", message.header().date().toString());
             mailData.putInt("attachments", message.attachments().size());
@@ -1301,7 +1303,7 @@ public class MailClient {
             mailData.putInt("id", ((Long) message.uid()).intValue());
             mailData.putInt("flags", message.flags());
             mailData.putString("from", message.header().from().displayName());
-            mailData.putString("from_mailbox", message.header().from().mailbox());
+            mailData.putString("fromMailbox", message.header().from().mailbox());
             mailData.putString("subject", message.header().subject());
             mailData.putString("date", message.header().date().toString());
             mailData.putInt("attachments", message.attachments().size());
