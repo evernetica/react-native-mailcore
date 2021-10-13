@@ -1089,14 +1089,18 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
             [mail setObject:[NSString stringWithFormat:@"%d",(int)message.flags] forKey:@"flags"];
             [mail setObject:message.header.from.displayName ? : @"" forKey:@"from"];
             [mail setObject:message.header.from.mailbox ?: @"" forKey:@"fromMailbox" ];
-            [mail setObject:message.header.subject forKey:@"subject"];
             [mail setObject:[dateFormat stringFromDate:message.header.date] forKey:@"date"];
             if (message.attachments != nil) {
                 [mail setObject:[NSString stringWithFormat:@"%lu", message.attachments.count] forKey:@"attachments"];
             } else {
                 [mail setObject:[NSString stringWithFormat:@"%d",0] forKey:@"attachments"];
             }
-            
+            if (message.header.subject != nil) {
+                [mail setObject:message.header.subject forKey:@"subject"];
+            } else {
+                [mail setObject:@"" forKey:@"subject"];
+            }
+
             // Append mail to mails result
             [mails addObject:mail];
         }
