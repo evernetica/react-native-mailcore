@@ -129,6 +129,10 @@ public class RNMailCoreModule extends ReactContextBaseJavaModule {
   public void sendMail(final ReadableMap obj, final Promise promise) {
       mailClient.sendMail(obj, promise, getCurrentActivity());
   }
+  @ReactMethod
+  public void saveDraft(final ReadableMap obj, final Promise promise) {
+    mailClient.saveDraft(obj, promise, getCurrentActivity());
+  }
 
   @ReactMethod
   public void getMail(final ReadableMap obj, final Promise promise) {
