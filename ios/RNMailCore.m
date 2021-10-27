@@ -630,13 +630,11 @@ RCT_EXPORT_METHOD(getMail:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)r
                             }
                         } @catch (NSException *exception) {
                             reject(@"Error", @"", [[NSError alloc] initWithDomain:exception.name code:0 userInfo:exception.userInfo]);
-                        } @finally {
-                            
                         }
                     }];
                 }
             } @catch (NSException *exception) {
-                reject(@"", @"", [[NSError alloc] initWithDomain:exception.name code:0 userInfo:exception.userInfo]);
+                reject(@"Error", @"Mail not found!", [[NSError alloc] initWithDomain:exception.name code:0 userInfo:exception.userInfo]);
             }
             
         }];
