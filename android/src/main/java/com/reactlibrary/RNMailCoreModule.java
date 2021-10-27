@@ -33,6 +33,16 @@ public class RNMailCoreModule extends ReactContextBaseJavaModule {
       }
     });
   }
+  @ReactMethod
+  public void loginSafeImap(final ReadableMap obj, final Promise promise){
+    getCurrentActivity().runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+        UserCredential user = new UserCredential(obj);
+        mailClient.initSafeIMAPSession(user,promise);
+      }
+    });
+  }
 
   @ReactMethod
   public void loginSmtp(final ReadableMap obj, final Promise promise){
@@ -203,6 +213,15 @@ public class RNMailCoreModule extends ReactContextBaseJavaModule {
       }
     });
   }
+  @ReactMethod
+  public void safeStatusFolder(final ReadableMap obj, final Promise promise) {
+    getCurrentActivity().runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+        mailClient.safeStatusFolder(obj,promise);
+      }
+    });
+  }
 
   @ReactMethod
   public void getMailsByRangeWithContent(final ReadableMap obj, final Promise promise) {
@@ -220,6 +239,15 @@ public class RNMailCoreModule extends ReactContextBaseJavaModule {
       @Override
       public void run() {
         mailClient.getMailsByRange(obj,promise);
+      }
+    });
+  }
+  @ReactMethod
+  public void safeGetMailsByRange(final ReadableMap obj, final Promise promise) {
+    getCurrentActivity().runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
+        mailClient.safeGetMailsByRange(obj,promise);
       }
     });
   }

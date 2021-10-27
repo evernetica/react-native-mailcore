@@ -64,6 +64,7 @@ public class MailClient {
 
     public SMTPSession smtpSession;
     public IMAPSession imapSession;
+    public IMAPSession safeImapSession;
 
     public void initIMAPSession(UserCredential userCredential, final Promise promise) {
         imapSession = new IMAPSession();
@@ -81,6 +82,36 @@ public class MailClient {
         imapSession.setUsername(userCredential.getUsername());
 
         IMAPOperation imapOperation = this.imapSession.checkAccountOperation();
+        imapOperation.start(new OperationCallback() {
+            @Override
+            public void succeeded() {
+                WritableMap result = Arguments.createMap();
+                result.putString("status", "SUCCESS");
+                promise.resolve(result);
+            }
+
+            @Override
+            public void failed(MailException e) {
+                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+            }
+        });
+    }
+    public void initSafeIMAPSession(UserCredential userCredential, final Promise promise) {
+        safeImapSession = new IMAPSession();
+        safeImapSession.setHostname(userCredential.getHostname());
+        safeImapSession.setPort(userCredential.getPort());
+        safeImapSession.setConnectionType(ConnectionType.ConnectionTypeTLS);
+
+        int authType = userCredential.getAuthType();
+        safeImapSession.setAuthType(authType);
+        if (authType == AuthType.AuthTypeXOAuth2) {
+            safeImapSession.setOAuth2Token(userCredential.getAccessToken());
+        } else {
+            safeImapSession.setPassword(userCredential.getPassword());
+        }
+        safeImapSession.setUsername(userCredential.getUsername());
+
+        IMAPOperation imapOperation = this.safeImapSession.checkAccountOperation();
         imapOperation.start(new OperationCallback() {
             @Override
             public void succeeded() {
@@ -1331,6 +1362,28 @@ public class MailClient {
         });
 
     }
+    public void safeStatusFolder(final ReadableMap obj, final Promise promise) {
+        String folder = obj.getString("folder");
+
+        final IMAPFolderStatusOperation folderStatusOperation = safeImapSession.folderStatusOperation(folder);
+        folderStatusOperation.start(new OperationCallback() {
+            @Override
+            public void succeeded() {
+                WritableMap result = Arguments.createMap();
+                result.putString("status", "SUCCESS");
+                result.putInt("unseenCount", (int) folderStatusOperation.status().unseenCount());
+                result.putInt("messageCount", (int) folderStatusOperation.status().messageCount());
+                result.putInt("recentCount", (int) folderStatusOperation.status().recentCount());
+                promise.resolve(result);
+            }
+
+            @Override
+            public void failed(MailException e) {
+                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+            }
+        });
+
+    }
 
     public void getMailsByRange(final ReadableMap obj, final Promise promise) {
         // Get arguments
@@ -1342,6 +1395,39 @@ public class MailClient {
         // Build operation
         IndexSet indexSet = IndexSet.indexSetWithRange(new Range(from, length));
         final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByNumberOperation(folder, requestKind, indexSet);
+
+        if (obj.hasKey("headers")) {
+            ReadableArray headersArray = obj.getArray("headers");
+            List<String> extraHeaders = new ArrayList<>();
+            for (int i = 0; headersArray.size() > i; i++) {
+                extraHeaders.add(headersArray.getString(i));
+            }
+            messagesOperation.setExtraHeaders(extraHeaders);
+        }
+
+        // Start operation
+        messagesOperation.start(new OperationCallback() {
+            @Override
+            public void succeeded() {
+                parseMessages(messagesOperation.messages(), promise);
+            }
+
+            @Override
+            public void failed(MailException e) {
+                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+            }
+        });
+    }
+    public void safeGetMailsByRange(final ReadableMap obj, final Promise promise) {
+        // Get arguments
+        final String folder = obj.getString("folder");
+        final int requestKind = obj.getInt("requestKind");
+        final int from = obj.getInt("from");
+        final int length = obj.getInt("length");
+
+        // Build operation
+        IndexSet indexSet = IndexSet.indexSetWithRange(new Range(from, length));
+        final IMAPFetchMessagesOperation messagesOperation = safeImapSession.fetchMessagesByNumberOperation(folder, requestKind, indexSet);
 
         if (obj.hasKey("headers")) {
             ReadableArray headersArray = obj.getArray("headers");
@@ -1488,6 +1574,7 @@ public class MailClient {
         result.putArray("mails", mails);
         promise.resolve(result);
     }
+
     private void parseMessagesWithContent(List<IMAPMessage> messages, final Promise promise, String folder) {
         final WritableMap result = Arguments.createMap();
         final WritableArray mails = Arguments.createArray();

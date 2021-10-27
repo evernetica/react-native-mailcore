@@ -60,6 +60,26 @@ RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
         [self startImapOperation:imapSession resolver:resolve rejecter:reject];
     }
 }
+RCT_EXPORT_METHOD(loginSafeImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    MCOIMAPSession *safeImapSession = [[MCOIMAPSession alloc] init];
+    safeImapSession.hostname = [RCTConvert NSString:obj[@"hostname"]];
+    safeImapSession.port = [RCTConvert int:obj[@"port"]];
+    safeImapSession.connectionType = MCOConnectionTypeTLS;
+    [safeImapSession setUsername:[RCTConvert NSString:obj[@"username"]]];
+    
+    int authType = [RCTConvert int:obj[@"authType"]];
+    [safeImapSession setAuthType:authType];
+    if (authType == MCOAuthTypeXOAuth2) {
+        safeImapSession.authType = MCOAuthTypeXOAuth2;
+        [safeImapSession setOAuth2Token:[RCTConvert NSString:obj[@"accessToken"]]];
+        [self startSafeImapOperation:safeImapSession resolver:resolve rejecter:reject];
+    } else {
+        safeImapSession.password = [RCTConvert NSString:obj[@"password"]];
+        [self startSafeImapOperation:safeImapSession resolver:resolve rejecter:reject];
+    }
+}
 
 RCT_EXPORT_METHOD(createFolder:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -1040,6 +1060,24 @@ RCT_EXPORT_METHOD(statusFolder:(NSDictionary *)obj resolver:(RCTPromiseResolveBl
         }
     }];
 }
+RCT_EXPORT_METHOD(safeStatusFolder:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSString *folder = [RCTConvert NSString:obj[@"folder"]];
+    [[_safeImapSession folderStatusOperation:folder] start:^(NSError * _Nullable error, MCOIMAPFolderStatus * _Nullable status) {
+        if(error) {
+            reject(@"Error", error.localizedDescription, error);
+        } else {
+            NSDictionary *result = @{
+                @"status": @"SUCCESS",
+                @"unseenCount": [NSNumber numberWithInt:status.unseenCount],
+                @"messageCount": [NSNumber numberWithInt:status.messageCount],
+                @"recentCount": [NSNumber numberWithInt:status.recentCount]
+            };
+            resolve(result);
+        }
+    }];
+}
 
 RCT_EXPORT_METHOD(getMailsByRange:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -1056,6 +1094,32 @@ RCT_EXPORT_METHOD(getMailsByRange:(NSDictionary *)obj resolver:(RCTPromiseResolv
     // Build operation
     MCOIndexSet *fetchRange = [MCOIndexSet indexSetWithRange:MCORangeMake(from, length)];
     MCOIMAPFetchMessagesOperation *operation = [_imapSession
+                                                fetchMessagesByNumberOperationWithFolder:folder
+                                                requestKind:requestKind
+                                                numbers:fetchRange];
+    
+    NSArray *extraHeadersRequest = [RCTConvert NSArray:obj[@"headers"]];
+    if (extraHeadersRequest != nil && extraHeadersRequest.count > 0) {
+        [operation setExtraHeaders:extraHeadersRequest];
+    }
+    
+    // Start operation
+    [operation start:^(NSError *error, NSArray *messages, MCOIndexSet *vanishedMessages) {
+        [self parseMessages:error messages:messages reject:reject resolve:resolve];
+    }];
+}
+RCT_EXPORT_METHOD(safeGetMailsByRange:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    // Get arguments
+    NSString *folder = [RCTConvert NSString:obj[@"folder"]];
+    int requestKind = [RCTConvert int:obj[@"requestKind"]];
+    int from = [RCTConvert int:obj[@"from"]];
+    int length = [RCTConvert int:obj[@"length"]];;
+    
+    // Build operation
+    MCOIndexSet *fetchRange = [MCOIndexSet indexSetWithRange:MCORangeMake(from, length)];
+    MCOIMAPFetchMessagesOperation *operation = [_safeImapSession
                                                 fetchMessagesByNumberOperationWithFolder:folder
                                                 requestKind:requestKind
                                                 numbers:fetchRange];
@@ -1135,6 +1199,21 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
     }];
 }
 
+- (void)startSafeImapOperation:(MCOIMAPSession *)imapSession resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject {
+    _safeImapSession = imapSession;
+    MCOIMAPOperation *imapOperation = [_safeImapSession checkAccountOperation];
+    [imapOperation start:^(NSError *error) {
+        if(error) {
+            NSLog(@"Error sending email: %@", error);
+            reject(@"Error", error.localizedDescription, error);
+        } else {
+            NSLog(@"Successfully sent email!");
+            NSDictionary *result = @{@"status": @"SUCCESS"};
+            resolve(result);
+        }
+    }];
+}
 - (void)startImapOperation:(MCOIMAPSession *)imapSession resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject {
     _imapSession = imapSession;
@@ -1298,6 +1377,7 @@ RCT_EXPORT_METHOD(getMailsByThread:(NSDictionary *)obj resolver:(RCTPromiseResol
                     }
                 } else {
                     NSLog([NSString stringWithFormat:@"ids_size_mailIds: received error"]);
+                    
                 }
             }];
         };
