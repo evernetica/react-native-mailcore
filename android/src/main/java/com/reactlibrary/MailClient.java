@@ -500,8 +500,10 @@ public class MailClient {
                     appendMessageOperation.start(new OperationCallback() {
                         @Override
                         public void succeeded() {
+                            WritableMap result = Arguments.createMap();
+                            result.putString("status", "SUCCESS");
                             Log.d("LogFetch", "PEREMOGA!");
-                            promise.resolve(null);
+                            promise.resolve(result);
                         }
 
                         @Override
@@ -595,7 +597,7 @@ public class MailClient {
     }
     public void getMail(final ReadableMap obj, final Promise promise) {
         final String folder = obj.getString("folder");
-        int messageId = obj.getInt("messageId");
+        final int messageId = obj.getInt("messageId");
         int requestKind = obj.getInt("requestKind");
         final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByUIDOperation(folder, requestKind, IndexSet.indexSetWithIndex(messageId));
 
