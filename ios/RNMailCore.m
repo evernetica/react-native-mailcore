@@ -605,28 +605,6 @@ RCT_EXPORT_METHOD(getMail:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)r
                                 [result setObject:inlines forKey:@"inline"];
                                 [result setValue:@"SUCCESS" forKey:@"status"];
                                 resolve(result);
-                            }if(error) {
-                                reject(@"Error", error.localizedDescription, error);
-                            } else {
-                                NSString *inlineData = [NSString stringWithFormat:@"data:image/jpg;base64,%@",
-                                                        [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength]];
-                                MCOMessageParser *messageParser = [[MCOMessageParser alloc] initWithData:data];
-                                NSString *msgHTMLBody = [messageParser htmlBodyRendering];
-                                NSString *plainTextBody = [messageParser plainTextBodyRendering];
-                                NSArray *inlineAttachments = [messageParser htmlInlineAttachments];
-                                NSMutableArray *inlines = [[NSMutableArray alloc] init];
-                                for(MCOAttachment *inlineAttachment in inlineAttachments) {
-                                    NSMutableDictionary *inlinesObject = [[NSMutableDictionary alloc] init];
-                                    [inlinesObject setObject:[NSString stringWithFormat:@"data:%@;base64,%@",inlineAttachment.mimeType,[inlineAttachment.data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength]] forKey:@"data"];
-                                    [inlinesObject setObject:[NSString stringWithFormat:@"%@",inlineAttachment.contentID] forKey:@"cid"];
-                                    [inlines addObject:inlinesObject];
-                                }
-                                
-                                [result setValue:msgHTMLBody forKey:@"body"];
-                                [result setValue:plainTextBody forKey: @"plainBody"];
-                                [result setObject:inlines forKey:@"inline"];
-                                [result setValue:@"SUCCESS" forKey:@"status"];
-                                resolve(result);
                             }
                         } @catch (NSException *exception) {
                             reject(@"Error", @"", [[NSError alloc] initWithDomain:exception.name code:0 userInfo:exception.userInfo]);
