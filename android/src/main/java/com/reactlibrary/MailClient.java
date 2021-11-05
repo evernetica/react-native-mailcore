@@ -70,7 +70,7 @@ public class MailClient {
 
     public void initIMAPSession(UserCredential userCredential, final Promise promise) {
         String userName = userCredential.getUsername();
-        if (!this.IMAPSessions.containsKey(userName)) {a
+        if (!this.IMAPSessions.containsKey(userName)) {
             final IMAPSession newImapSession = new IMAPSession();
             newImapSession.setHostname(userCredential.getHostname());
             newImapSession.setPort(userCredential.getPort());
