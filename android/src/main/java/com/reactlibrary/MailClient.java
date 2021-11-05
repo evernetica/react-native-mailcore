@@ -49,9 +49,11 @@ import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Arrays;
 import java.util.ListIterator;
+import java.util.Map;
 
 import android.app.Activity;
 import android.content.ContentResolver;
@@ -61,40 +63,59 @@ import android.util.Log;
 import android.util.Pair;
 
 public class MailClient {
-
+    private Map<String, IMAPSession> IMAPSessions = new HashMap<String, IMAPSession>();
     public SMTPSession smtpSession;
     public IMAPSession imapSession;
     public IMAPSession safeImapSession;
 
     public void initIMAPSession(UserCredential userCredential, final Promise promise) {
-        imapSession = new IMAPSession();
-        imapSession.setHostname(userCredential.getHostname());
-        imapSession.setPort(userCredential.getPort());
-        imapSession.setConnectionType(ConnectionType.ConnectionTypeTLS);
+        String userName = userCredential.getUsername();
+        if (!this.IMAPSessions.containsKey(userName)) {a
+            final IMAPSession newImapSession = new IMAPSession();
+            newImapSession.setHostname(userCredential.getHostname());
+            newImapSession.setPort(userCredential.getPort());
+            newImapSession.setConnectionType(ConnectionType.ConnectionTypeTLS);
 
-        int authType = userCredential.getAuthType();
-        imapSession.setAuthType(authType);
-        if (authType == AuthType.AuthTypeXOAuth2) {
-            imapSession.setOAuth2Token(userCredential.getAccessToken());
+            int authType = userCredential.getAuthType();
+            newImapSession.setAuthType(authType);
+            if (authType == AuthType.AuthTypeXOAuth2) {
+                newImapSession.setOAuth2Token(userCredential.getAccessToken());
+            } else {
+                newImapSession.setPassword(userCredential.getPassword());
+            }
+            newImapSession.setUsername(userName);
+            IMAPSessions.put(userName, newImapSession);
+
+            IMAPOperation imapOperation = newImapSession.checkAccountOperation();
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("status", "SUCCESS");
+                    promise.resolve(result);
+                }
+
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
         } else {
-            imapSession.setPassword(userCredential.getPassword());
+            IMAPOperation imapOperation = this.IMAPSessions.get(userName).noopOperation();
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("status", "SUCCESS");
+                    promise.resolve(result);
+                }
+
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
         }
-        imapSession.setUsername(userCredential.getUsername());
-
-        IMAPOperation imapOperation = this.imapSession.checkAccountOperation();
-        imapOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                WritableMap result = Arguments.createMap();
-                result.putString("status", "SUCCESS");
-                promise.resolve(result);
-            }
-
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
     }
     public void initSafeIMAPSession(UserCredential userCredential, final Promise promise) {
         safeImapSession = new IMAPSession();
@@ -378,6 +399,7 @@ public class MailClient {
 
     }
     public void saveDraft(final ReadableMap obj, final Promise promise, final Activity currentActivity) {
+        String userEmail = obj.getString("email");
         MessageHeader messageHeader = new MessageHeader();
         if (obj.hasKey("headers")) {
             ReadableMap headerObj = obj.getMap("headers");
@@ -492,248 +514,175 @@ public class MailClient {
         if(!ccAddressList.isEmpty()) allRecipients.addAll(ccAddressList);
         if(!bccAddressList.isEmpty()) allRecipients.addAll(bccAddressList);
         String folder = obj.getString("folder");
-        if (obj.isNull("original_id")) {
-            final IMAPAppendMessageOperation appendMessageOperation = imapSession.appendMessageOperation(folder, messageBuilder.data(), 0);
-            currentActivity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    appendMessageOperation.start(new OperationCallback() {
-                        @Override
-                        public void succeeded() {
-                            WritableMap result = Arguments.createMap();
-                            result.putString("status", "SUCCESS");
-                            Log.d("LogFetch", "PEREMOGA!");
-                            promise.resolve(result);
-                        }
+        if (IMAPSessions.containsKey(userEmail)) {
+            if (obj.isNull("original_id")) {
+                final IMAPAppendMessageOperation appendMessageOperation = IMAPSessions.get(userEmail).appendMessageOperation(folder, messageBuilder.data(), 0);
+                currentActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        appendMessageOperation.start(new OperationCallback() {
+                            @Override
+                            public void succeeded() {
+                                WritableMap result = Arguments.createMap();
+                                result.putString("status", "SUCCESS");
+                                Log.d("LogFetch", "PEREMOGA!");
+                                promise.resolve(result);
+                            }
 
-                        @Override
-                        public void failed(MailException e) {
-                            Log.d("LogFetch", "ZRDA");
-                            promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-                        }
-                    });
-                }
-            });
+                            @Override
+                            public void failed(MailException e) {
+                                Log.d("LogFetch", "ZRDA");
+                                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                            }
+                        });
+                    }
+                });
+            }
         }
-//        else {
-//            currentActivity.runOnUiThread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    long original_id = (long) obj.getInt("original_id");
-//                    // Long original_id = ((Double)obj.getDouble("original_id")).longValue();
-//                    String original_folder = obj.getString("original_folder");
-//                    final IMAPFetchContentOperation fetchOriginalMessageOperation = imapSession.fetchMessageByUIDOperation(original_folder, original_id);
-//                    currentActivity.runOnUiThread(new Runnable() {
-//                        @Override
-//                        public void run() {
-//                            fetchOriginalMessageOperation.start(new OperationCallback() {
-//                                @Override
-//                                public void succeeded() {
-//                                    MessageParser messageParser = MessageParser.messageParserWithData(fetchOriginalMessageOperation.data());
-//
-//                                    // https://github.com/MailCore/mailcore2/blob/master/src/core/abstract/MCMessageHeader.cpp#L1197
-//                                    if (messageParser.header().messageID() != null) {
-//                                        messageBuilder.header().setInReplyTo(new ArrayList<>(Arrays.asList(messageParser.header().messageID())));
-//                                    }
-//
-//                                    if (messageParser.header().references() != null) {
-//                                        ArrayList<String> newReferences = new ArrayList<>(messageParser.header().references());
-//                                        if (messageParser.header().messageID() != null) {
-//                                            newReferences.add(messageParser.header().messageID());
-//                                        }
-//                                        messageBuilder.header().setReferences(newReferences);
-//                                    }
-//
-//                                    // set original attachments if they were any left
-//                                    if (obj.hasKey("attachments")) {
-//                                        ReadableArray attachments = obj.getArray("attachments");
-//
-//                                        for (int i = 0; i < attachments.size(); i++) {
-//                                            ReadableMap attachment = attachments.getMap(i);
-//
-//                                            if (attachment.getString("uniqueId") == null)
-//                                                continue;
-//
-//                                            for (AbstractPart abstractPart : messageParser.attachments()) {
-//                                                if (abstractPart instanceof Attachment) {
-//                                                    Attachment original_attachment = (Attachment) abstractPart;
-//
-//                                                    if (!original_attachment.uniqueID().equals(attachment.getString("uniqueId")))
-//                                                        continue;
-//
-//                                                    messageBuilder.addAttachment(original_attachment);
-//                                                }
-//                                            }
-//                                        }
-//                                    }
-//
-//                                    final SMTPOperation smtpOperation = smtpSession.sendMessageOperation(fromAddress, allRecipients, messageBuilder.data());
-//                                    smtpOperation.start(new OperationCallback() {
-//                                        @Override
-//                                        public void succeeded() {
-//                                            WritableMap result = Arguments.createMap();
-//                                            result.putString("status", "SUCCESS");
-//                                            promise.resolve(result);
-//                                        }
-//
-//                                        @Override
-//                                        public void failed(MailException e) {
-//                                            promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-//                                        }
-//                                    });
-//                                }
-//
-//                                @Override
-//                                public void failed(MailException e) {
-//                                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-//                                }
-//                            });
-//                        }
-//                    });
-//                }
-//            });
-//        }
-
     }
     public void getMail(final ReadableMap obj, final Promise promise) {
         final String folder = obj.getString("folder");
         final int messageId = obj.getInt("messageId");
         int requestKind = obj.getInt("requestKind");
-        final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByUIDOperation(folder, requestKind, IndexSet.indexSetWithIndex(messageId));
+        final String userEmail = obj.getString("email");
+        if (IMAPSessions.containsKey(userEmail)) {
+            final IMAPFetchMessagesOperation messagesOperation = IMAPSessions.get(userEmail).fetchMessagesByUIDOperation(folder, requestKind, IndexSet.indexSetWithIndex(messageId));
 
-        if (obj.hasKey("headers")) {
-            ReadableArray headersArray = obj.getArray("headers");
-            List<String> extraHeaders = new ArrayList<>();
-            for (int i = 0; headersArray.size() > i; i++) {
-                extraHeaders.add(headersArray.getString(i));
+            if (obj.hasKey("headers")) {
+                ReadableArray headersArray = obj.getArray("headers");
+                List<String> extraHeaders = new ArrayList<>();
+                for (int i = 0; headersArray.size() > i; i++) {
+                    extraHeaders.add(headersArray.getString(i));
+                }
+                messagesOperation.setExtraHeaders(extraHeaders);
             }
-            messagesOperation.setExtraHeaders(extraHeaders);
+
+            messagesOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    List<IMAPMessage> messages = messagesOperation.messages();
+                    if (messages.isEmpty()) {
+                        Log.d("messageId not found!", String.valueOf(messageId));
+                        promise.reject("Mail not found!");
+                        return;
+                    }
+                    final IMAPMessage message = messages.get(0);
+                    final IMAPFetchParsedContentOperation imapFetchParsedContentOperation = IMAPSessions.get(userEmail).fetchParsedMessageByUIDOperation(folder, message.uid());
+                    imapFetchParsedContentOperation.start(new OperationCallback() {
+                        @Override
+                        public void succeeded() {
+                            WritableMap mailData = Arguments.createMap();
+                            final Long uid = message.uid();
+                            mailData.putInt("id", uid.intValue());
+                            mailData.putString("date", message.header().date().toString());
+                            WritableMap fromData = Arguments.createMap();
+                            fromData.putString("mailbox", message.header().from().mailbox());
+                            mailData.putInt("flags", message.flags());
+                            fromData.putString("displayName", message.header().from().displayName());
+                            mailData.putMap("from", fromData);
+                            if (message.header().to() != null) {
+                                WritableMap toData = Arguments.createMap();
+                                ListIterator<Address> toIterator = message.header().to().listIterator();
+                                while (toIterator.hasNext()) {
+                                    Address toAddress = toIterator.next();
+                                    toData.putString(toAddress.mailbox(), toAddress.displayName());
+                                }
+                                mailData.putMap("to", toData);
+                            }
+                            if (message.header().cc() != null) {
+                                WritableMap ccData = Arguments.createMap();
+                                ListIterator<Address> ccIterator = message.header().cc().listIterator();
+                                while (ccIterator.hasNext()) {
+                                    Address ccAddress = ccIterator.next();
+                                    ccData.putString(ccAddress.mailbox(), ccAddress.displayName());
+                                }
+                                mailData.putMap("cc", ccData);
+                            }
+                            if (message.header().bcc() != null) {
+                                WritableMap bccData = Arguments.createMap();
+                                ListIterator<Address> bccIterator = message.header().bcc().listIterator();
+                                while (bccIterator.hasNext()) {
+                                    Address bccAddress = bccIterator.next();
+                                    bccData.putString(bccAddress.mailbox(), bccAddress.displayName());
+                                }
+                                mailData.putMap("bcc", bccData);
+                            }
+                            mailData.putString("subject", message.header().subject());
+                            MessageParser parser = imapFetchParsedContentOperation.parser();
+                            mailData.putString("body", parser.htmlBodyRendering());
+                            mailData.putString("plainBody", parser.plainTextBodyRendering(true));
+
+                            WritableMap attachmentsData = Arguments.createMap();
+                            List<AbstractPart> attachments = message.attachments();
+                            if (!attachments.isEmpty()) {
+                                for (AbstractPart attachment : message.attachments()) {
+                                    IMAPPart part = (IMAPPart) attachment;
+                                    WritableMap attachmentData = Arguments.createMap();
+                                    attachmentData.putString("filename", attachment.filename());
+
+                                    Long size = part.size();
+                                    attachmentData.putString("size", size.toString());
+
+                                    attachmentData.putInt("encoding", part.encoding());
+                                    attachmentData.putString("uniqueId", part.uniqueID());
+
+                                    attachmentsData.putMap(part.partID(), attachmentData);
+                                }
+                            }
+                            mailData.putMap("attachments", attachmentsData);
+
+                            if (!message.htmlInlineAttachments().isEmpty()) {
+                                WritableMap attachmentsDataInline = Arguments.createMap();
+                                List<AbstractPart> attachmentsInline = message.htmlInlineAttachments();
+
+                                for (AbstractPart attachment : attachmentsInline) {
+                                    IMAPPart part = (IMAPPart) attachment;
+                                    WritableMap attachmentData = Arguments.createMap();
+                                    attachmentData.putString("filename", attachment.filename());
+
+                                    Long size = part.size();
+                                    attachmentData.putString("size", size.toString());
+                                    attachmentData.putString("cid", attachment.contentID());
+                                    attachmentData.putString("partID", ((IMAPPart) attachment).partID());
+                                    attachmentData.putInt("encoding", part.encoding());
+                                    attachmentData.putString("uniqueId", part.uniqueID());
+                                    attachmentData.putString("mimepart", attachment.mimeType());
+
+                                    attachmentsDataInline.putMap(part.partID(), attachmentData);
+                                }
+                                mailData.putMap("inline", attachmentsDataInline);
+                            }
+
+                            // Process fetched headers from mail
+                            WritableMap headerData = Arguments.createMap();
+                            headerData.putString("gmailMessageID", Long.toString(message.gmailMessageID()));
+                            headerData.putString("gmailThreadID", Long.toString(message.gmailThreadID()));
+
+                            ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
+                            while (headerIterator.hasNext()) {
+                                String headerKey = headerIterator.next();
+                                headerData.putString(headerKey, message.header().extraHeaderValueForName(headerKey));
+                            }
+                            mailData.putMap("headers", headerData);
+
+                            mailData.putString("status", "success");
+                            promise.resolve(mailData);
+                        }
+
+                        @Override
+                        public void failed(MailException e) {
+                            promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                        }
+                    });
+                }
+
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
         }
 
-        messagesOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                List<IMAPMessage> messages = messagesOperation.messages();
-                if (messages.isEmpty()) {
-                    promise.reject("Mail not found!");
-                    return;
-                }
-                final IMAPMessage message = messages.get(0);
-                final IMAPFetchParsedContentOperation imapFetchParsedContentOperation = imapSession.fetchParsedMessageByUIDOperation(folder, message.uid());
-                imapFetchParsedContentOperation.start(new OperationCallback() {
-                    @Override
-                    public void succeeded() {
-                        WritableMap mailData = Arguments.createMap();
-                        final Long uid = message.uid();
-                        mailData.putInt("id", uid.intValue());
-                        mailData.putString("date", message.header().date().toString());
-                        WritableMap fromData = Arguments.createMap();
-                        fromData.putString("mailbox", message.header().from().mailbox());
-                        mailData.putInt("flags", message.flags());
-                        fromData.putString("displayName", message.header().from().displayName());
-                        mailData.putMap("from", fromData);
-                        if (message.header().to() != null) {
-                            WritableMap toData = Arguments.createMap();
-                            ListIterator<Address> toIterator = message.header().to().listIterator();
-                            while (toIterator.hasNext()) {
-                                Address toAddress = toIterator.next();
-                                toData.putString(toAddress.mailbox(), toAddress.displayName());
-                            }
-                            mailData.putMap("to", toData);
-                        }
-                        if (message.header().cc() != null) {
-                            WritableMap ccData = Arguments.createMap();
-                            ListIterator<Address> ccIterator = message.header().cc().listIterator();
-                            while (ccIterator.hasNext()) {
-                                Address ccAddress = ccIterator.next();
-                                ccData.putString(ccAddress.mailbox(), ccAddress.displayName());
-                            }
-                            mailData.putMap("cc", ccData);
-                        }
-                        if (message.header().bcc() != null) {
-                            WritableMap bccData = Arguments.createMap();
-                            ListIterator<Address> bccIterator = message.header().bcc().listIterator();
-                            while (bccIterator.hasNext()) {
-                                Address bccAddress = bccIterator.next();
-                                bccData.putString(bccAddress.mailbox(), bccAddress.displayName());
-                            }
-                            mailData.putMap("bcc", bccData);
-                        }
-                        mailData.putString("subject", message.header().subject());
-                        MessageParser parser = imapFetchParsedContentOperation.parser();
-                        mailData.putString("body", parser.htmlBodyRendering());
-                        mailData.putString("plainBody", parser.plainTextBodyRendering(true));
-
-                        WritableMap attachmentsData = Arguments.createMap();
-                        List<AbstractPart> attachments = message.attachments();
-                        if (!attachments.isEmpty()) {
-                            for (AbstractPart attachment : message.attachments()) {
-                                IMAPPart part = (IMAPPart) attachment;
-                                WritableMap attachmentData = Arguments.createMap();
-                                attachmentData.putString("filename", attachment.filename());
-
-                                Long size = part.size();
-                                attachmentData.putString("size", size.toString());
-
-                                attachmentData.putInt("encoding", part.encoding());
-                                attachmentData.putString("uniqueId", part.uniqueID());
-
-                                attachmentsData.putMap(part.partID(), attachmentData);
-                            }
-                        }
-                        mailData.putMap("attachments", attachmentsData);
-
-                        if (!message.htmlInlineAttachments().isEmpty()) {
-                            WritableMap attachmentsDataInline = Arguments.createMap();
-                            List<AbstractPart> attachmentsInline = message.htmlInlineAttachments();
-
-                            for (AbstractPart attachment : attachmentsInline) {
-                                IMAPPart part = (IMAPPart) attachment;
-                                WritableMap attachmentData = Arguments.createMap();
-                                attachmentData.putString("filename", attachment.filename());
-
-                                Long size = part.size();
-                                attachmentData.putString("size", size.toString());
-                                attachmentData.putString("cid", attachment.contentID());
-                                attachmentData.putString("partID", ((IMAPPart) attachment).partID());
-                                attachmentData.putInt("encoding", part.encoding());
-                                attachmentData.putString("uniqueId", part.uniqueID());
-                                attachmentData.putString("mimepart", attachment.mimeType());
-
-                                attachmentsDataInline.putMap(part.partID(), attachmentData);
-                            }
-                            mailData.putMap("inline", attachmentsDataInline);
-                        }
-
-                        // Process fetched headers from mail
-                        WritableMap headerData = Arguments.createMap();
-                        headerData.putString("gmailMessageID", Long.toString(message.gmailMessageID()));
-                        headerData.putString("gmailThreadID", Long.toString(message.gmailThreadID()));
-
-                        ListIterator<String> headerIterator = message.header().allExtraHeadersNames().listIterator();
-                        while (headerIterator.hasNext()) {
-                            String headerKey = headerIterator.next();
-                            headerData.putString(headerKey, message.header().extraHeaderValueForName(headerKey));
-                        }
-                        mailData.putMap("headers", headerData);
-
-                        mailData.putString("status", "success");
-                        promise.resolve(mailData);
-                    }
-
-                    @Override
-                    public void failed(MailException e) {
-
-                        promise.reject("", "");
-                    }
-                });
-            }
-
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
     }
 
     public void createFolderLabel(final ReadableMap obj, final Promise promise) {
@@ -787,82 +736,92 @@ public class MailClient {
         });
     }
 
-    public void getFolders(final Promise promise) {
-        final IMAPFetchFoldersOperation foldersOperation = imapSession.fetchAllFoldersOperation();
-        foldersOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                List<IMAPFolder> folders = foldersOperation.folders();
-                WritableMap result = Arguments.createMap();
-                WritableArray a = new WritableNativeArray();
-                result.putString("status", "SUCCESS");
-                for (IMAPFolder folder : folders) {
-                    WritableMap mapFolder = Arguments.createMap();
-                    mapFolder.putString("path", folder.path());
-                    mapFolder.putInt("flags", folder.flags());
-                    a.pushMap(mapFolder);
+    public void getFolders(final ReadableMap obj, final Promise promise) {
+        String userEmail = obj.getString("email");
+        if (IMAPSessions.containsKey(userEmail)) {
+            final IMAPFetchFoldersOperation foldersOperation = IMAPSessions.get(userEmail).fetchAllFoldersOperation();
+            foldersOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    List<IMAPFolder> folders = foldersOperation.folders();
+                    WritableMap result = Arguments.createMap();
+                    WritableArray a = new WritableNativeArray();
+                    result.putString("status", "SUCCESS");
+                    for (IMAPFolder folder : folders) {
+                        WritableMap mapFolder = Arguments.createMap();
+                        mapFolder.putString("path", folder.path());
+                        mapFolder.putInt("flags", folder.flags());
+                        a.pushMap(mapFolder);
+                    }
+                    result.putArray("folders", a);
+                    promise.resolve(result);
                 }
-                result.putArray("folders", a);
-                promise.resolve(result);
-            }
 
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
+        }
     }
 
     public void moveEmail(final ReadableMap obj, final Promise promise) {
         String from = obj.getString("folderFrom");
         int messageId = obj.getInt("messageId");
         String to = obj.getString("folderTo");
-        IMAPOperation imapOperation = imapSession.copyMessagesOperation(from, IndexSet.indexSetWithIndex(messageId), to);
-        imapOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-            }
+        String userEmail = obj.getString("email");
+        if (IMAPSessions.containsKey(userEmail)) {
+            IMAPOperation imapOperation = IMAPSessions.get(userEmail).copyMessagesOperation(from, IndexSet.indexSetWithIndex(messageId), to);
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                }
 
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
 
-        WritableMap permantDeleteRequest = Arguments.createMap();
-        permantDeleteRequest.putString("folder", from);
-        permantDeleteRequest.putInt("messageId", messageId);
-        permantDelete(permantDeleteRequest, promise);
+            WritableMap permantDeleteRequest = Arguments.createMap();
+            permantDeleteRequest.putString("folder", from);
+            permantDeleteRequest.putString("email", userEmail);
+            permantDeleteRequest.putInt("messageId", messageId);
+            permantDelete(permantDeleteRequest, promise);
+        }
     }
 
     public void permantDelete(final ReadableMap obj, final Promise promise) {
         String folder = obj.getString("folder");
         int messageId = obj.getInt("messageId");
-        IMAPOperation imapOperation = imapSession.storeFlagsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), 0, MessageFlag.MessageFlagDeleted);
-        imapOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-            }
+        String userEmail = obj.getString("email");
+        if (IMAPSessions.containsKey(userEmail)) {
+            IMAPOperation imapOperation = IMAPSessions.get(userEmail).storeFlagsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), 0, MessageFlag.MessageFlagDeleted);
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                }
 
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
-        imapOperation = imapSession.expungeOperation(folder);
-        imapOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                WritableMap result = Arguments.createMap();
-                result.putString("status", "SUCCESS");
-                promise.resolve(result);
-            }
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
+            imapOperation = IMAPSessions.get(userEmail).expungeOperation(folder);
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("status", "SUCCESS");
+                    promise.resolve(result);
+                }
 
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
+        }
     }
 
     public void ActionLabelMessage(final ReadableMap obj, final Promise promise) {
@@ -870,24 +829,28 @@ public class MailClient {
         int messageId = obj.getInt("messageId");
         int flag = obj.getInt("flagsRequestKind");
         ReadableArray listTags = obj.getArray("tags");
+        String userEmail = obj.getString("email");
+
         List<String> tags = new ArrayList<String>();
         for (int i = 0; i < listTags.size(); i++) {
             tags.add(listTags.getString(i));
         }
-        IMAPOperation imapOperation = imapSession.storeLabelsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), flag, tags);
-        imapOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                WritableMap result = Arguments.createMap();
-                result.putString("status", "SUCCESS");
-                promise.resolve(result);
-            }
+        if (IMAPSessions.containsKey(userEmail)) {
+            IMAPOperation imapOperation = IMAPSessions.get(userEmail).storeLabelsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), flag, tags);
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("status", "SUCCESS");
+                    promise.resolve(result);
+                }
 
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
+        }
     }
 
     public void ActionFlagMessage(final ReadableMap obj, final Promise promise) {
@@ -895,21 +858,23 @@ public class MailClient {
         int messageId = obj.getInt("messageId");
         int flag = obj.getInt("flagsRequestKind");
         int messageFlag = obj.getInt("messageFlag");
+        String userEmail = obj.getString("email");
+        if (IMAPSessions.containsKey(userEmail)) {
+            IMAPOperation imapOperation = IMAPSessions.get(userEmail).storeFlagsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), flag, messageFlag);
+            imapOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("status", "SUCCESS");
+                    promise.resolve(result);
+                }
 
-        IMAPOperation imapOperation = imapSession.storeFlagsByUIDOperation(folder, IndexSet.indexSetWithIndex(messageId), flag, messageFlag);
-        imapOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                WritableMap result = Arguments.createMap();
-                result.putString("status", "SUCCESS");
-                promise.resolve(result);
-            }
-
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
+        }
     }
 
     public void getMails(final ReadableMap obj, final Promise promise) {
@@ -1344,25 +1309,26 @@ public class MailClient {
 
     public void statusFolder(final ReadableMap obj, final Promise promise) {
         String folder = obj.getString("folder");
+        String userEmail = obj.getString("email");
+        if (IMAPSessions.containsKey(userEmail)) {
+            final IMAPFolderStatusOperation folderStatusOperation = IMAPSessions.get(userEmail).folderStatusOperation(folder);
+            folderStatusOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    WritableMap result = Arguments.createMap();
+                    result.putString("status", "SUCCESS");
+                    result.putInt("unseenCount", (int) folderStatusOperation.status().unseenCount());
+                    result.putInt("messageCount", (int) folderStatusOperation.status().messageCount());
+                    result.putInt("recentCount", (int) folderStatusOperation.status().recentCount());
+                    promise.resolve(result);
+                }
 
-        final IMAPFolderStatusOperation folderStatusOperation = imapSession.folderStatusOperation(folder);
-        folderStatusOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                WritableMap result = Arguments.createMap();
-                result.putString("status", "SUCCESS");
-                result.putInt("unseenCount", (int) folderStatusOperation.status().unseenCount());
-                result.putInt("messageCount", (int) folderStatusOperation.status().messageCount());
-                result.putInt("recentCount", (int) folderStatusOperation.status().recentCount());
-                promise.resolve(result);
-            }
-
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
-
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
+        }
     }
     public void safeStatusFolder(final ReadableMap obj, final Promise promise) {
         String folder = obj.getString("folder");
@@ -1388,7 +1354,7 @@ public class MailClient {
     }
 
     public void getMailsByRange(final ReadableMap obj, final Promise promise) {
-        // Get arguments
+        String userEmail = obj.getString("email");
         final String folder = obj.getString("folder");
         final int requestKind = obj.getInt("requestKind");
         final int from = obj.getInt("from");
@@ -1396,29 +1362,31 @@ public class MailClient {
 
         // Build operation
         IndexSet indexSet = IndexSet.indexSetWithRange(new Range(from, length));
-        final IMAPFetchMessagesOperation messagesOperation = imapSession.fetchMessagesByNumberOperation(folder, requestKind, indexSet);
 
-        if (obj.hasKey("headers")) {
-            ReadableArray headersArray = obj.getArray("headers");
-            List<String> extraHeaders = new ArrayList<>();
-            for (int i = 0; headersArray.size() > i; i++) {
-                extraHeaders.add(headersArray.getString(i));
+        if (IMAPSessions.containsKey(userEmail)) {
+            final IMAPFetchMessagesOperation messagesOperation = IMAPSessions.get(userEmail).fetchMessagesByNumberOperation(folder, requestKind, indexSet);
+            if (obj.hasKey("headers")) {
+                ReadableArray headersArray = obj.getArray("headers");
+                List<String> extraHeaders = new ArrayList<>();
+                for (int i = 0; headersArray.size() > i; i++) {
+                    extraHeaders.add(headersArray.getString(i));
+                }
+                messagesOperation.setExtraHeaders(extraHeaders);
             }
-            messagesOperation.setExtraHeaders(extraHeaders);
+
+            // Start operation
+            messagesOperation.start(new OperationCallback() {
+                @Override
+                public void succeeded() {
+                    parseMessages(messagesOperation.messages(), promise);
+                }
+
+                @Override
+                public void failed(MailException e) {
+                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                }
+            });
         }
-
-        // Start operation
-        messagesOperation.start(new OperationCallback() {
-            @Override
-            public void succeeded() {
-                parseMessages(messagesOperation.messages(), promise);
-            }
-
-            @Override
-            public void failed(MailException e) {
-                promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-            }
-        });
     }
     public void safeGetMailsByRange(final ReadableMap obj, final Promise promise) {
         // Get arguments

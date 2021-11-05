@@ -86,11 +86,11 @@ public class RNMailCoreModule extends ReactContextBaseJavaModule {
   }
   
   @ReactMethod
-  public void getFolders(final Promise promise) {
+  public void getFolders(final ReadableMap obj, final Promise promise) {
     getCurrentActivity().runOnUiThread(new Runnable() {
       @Override
       public void run() {
-        mailClient.getFolders(promise);
+        mailClient.getFolders(obj, promise);
       }
     });
   }

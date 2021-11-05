@@ -9,13 +9,16 @@
     @property (strong, nonatomic) MCOSMTPSession *smtpObject;
     @property (strong, nonatomic) MCOIMAPSession *imapSession;
     @property (strong, nonatomic) MCOIMAPSession *safeImapSession;
-
-    - (instancetype)init:(MCOSMTPSession *)smtpObject;
-    - (instancetype)init:(MCOSMTPSession *)imapObject;
-    - (instancetype)init:(MCOSMTPSession *)safeImapObject;
+    @property (strong, nonatomic) NSMutableDictionary *IMAPSessions;
+    
+    - (instancetype)init;
+//    - (instancetype)initSmtp:(MCOSMTPSession *)smtpObject;
+//    - (instancetype)initImap:(MCOSMTPSession *)imapObject;
+//    - (instancetype)init:(MCOSMTPSession *)safeImapObject;
+//    - (instancetype)initIMAPSessions:(NSMutableDictionary *)IMAPSessions;
 
     - (MCOSMTPSession *) getSmtpObject;
     - (MCOSMTPSession *) getImapObject;
-    - (MCOSMTPSession *) getSafeImapObject;
+    
 @end
   
