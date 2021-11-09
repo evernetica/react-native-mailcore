@@ -70,7 +70,7 @@ public class MailClient {
 
     public void initIMAPSession(UserCredential userCredential, final Promise promise) {
         String userName = userCredential.getUsername();
-        if (!this.IMAPSessions.containsKey(userName)) {
+//        if (!this.IMAPSessions.containsKey(userName)) {
             final IMAPSession newImapSession = new IMAPSession();
             newImapSession.setHostname(userCredential.getHostname());
             newImapSession.setPort(userCredential.getPort());
@@ -100,22 +100,22 @@ public class MailClient {
                     promise.reject(String.valueOf(e.errorCode()), e.getMessage());
                 }
             });
-        } else {
-            IMAPOperation imapOperation = this.IMAPSessions.get(userName).noopOperation();
-            imapOperation.start(new OperationCallback() {
-                @Override
-                public void succeeded() {
-                    WritableMap result = Arguments.createMap();
-                    result.putString("status", "SUCCESS");
-                    promise.resolve(result);
-                }
-
-                @Override
-                public void failed(MailException e) {
-                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-                }
-            });
-        }
+//        } else {
+//            IMAPOperation imapOperation = this.IMAPSessions.get(userName).noopOperation();
+//            imapOperation.start(new OperationCallback() {
+//                @Override
+//                public void succeeded() {
+//                    WritableMap result = Arguments.createMap();
+//                    result.putString("status", "SUCCESS");
+//                    promise.resolve(result);
+//                }
+//
+//                @Override
+//                public void failed(MailException e) {
+//                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+//                }
+//            });
+//        }
     }
     public void initSafeIMAPSession(UserCredential userCredential, final Promise promise) {
         safeImapSession = new IMAPSession();
@@ -800,27 +800,27 @@ public class MailClient {
             imapOperation.start(new OperationCallback() {
                 @Override
                 public void succeeded() {
-                }
+                    IMAPOperation expungeOperation = IMAPSessions.get(userEmail).expungeOperation(folder);
+                    expungeOperation.start(new OperationCallback() {
+                        @Override
+                        public void succeeded() {
+                            WritableMap result = Arguments.createMap();
+                            result.putString("status", "SUCCESS");
+                            promise.resolve(result);
+                        }
 
+                        @Override
+                        public void failed(MailException e) {
+                            promise.reject(String.valueOf(e.errorCode()), e.getMessage());
+                        }
+                    });
+                }
                 @Override
                 public void failed(MailException e) {
                     promise.reject(String.valueOf(e.errorCode()), e.getMessage());
                 }
             });
-            imapOperation = IMAPSessions.get(userEmail).expungeOperation(folder);
-            imapOperation.start(new OperationCallback() {
-                @Override
-                public void succeeded() {
-                    WritableMap result = Arguments.createMap();
-                    result.putString("status", "SUCCESS");
-                    promise.resolve(result);
-                }
 
-                @Override
-                public void failed(MailException e) {
-                    promise.reject(String.valueOf(e.errorCode()), e.getMessage());
-                }
-            });
         }
     }
 

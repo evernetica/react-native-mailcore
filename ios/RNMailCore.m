@@ -46,31 +46,31 @@ RCT_EXPORT_METHOD(loginImap:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock
     NSString *userEmail = [RCTConvert NSString:obj[@"username"]];
     MCOIMAPSession *currentSession = _IMAPSessions[userEmail];
 //    if (!currentSession) {
-        MCOIMAPSession *imapSession = [[MCOIMAPSession alloc] init];
-        imapSession.hostname = [RCTConvert NSString:obj[@"hostname"]];
-        imapSession.port = [RCTConvert int:obj[@"port"]];
-        imapSession.connectionType = MCOConnectionTypeTLS;
-        [imapSession setUsername:[RCTConvert NSString:obj[@"username"]]];
+    MCOIMAPSession *imapSession = [[MCOIMAPSession alloc] init];
+    imapSession.hostname = [RCTConvert NSString:obj[@"hostname"]];
+    imapSession.port = [RCTConvert int:obj[@"port"]];
+    imapSession.connectionType = MCOConnectionTypeTLS;
+    [imapSession setUsername:[RCTConvert NSString:obj[@"username"]]];
+    
+    int authType = [RCTConvert int:obj[@"authType"]];
+    [imapSession setAuthType:authType];
+    if (authType == MCOAuthTypeXOAuth2) {
+        imapSession.authType = MCOAuthTypeXOAuth2;
+        [imapSession setOAuth2Token:[RCTConvert NSString:obj[@"accessToken"]]];
         
-        int authType = [RCTConvert int:obj[@"authType"]];
-        [imapSession setAuthType:authType];
-        if (authType == MCOAuthTypeXOAuth2) {
-            imapSession.authType = MCOAuthTypeXOAuth2;
-            [imapSession setOAuth2Token:[RCTConvert NSString:obj[@"accessToken"]]];
-            
+    } else {
+        imapSession.password = [RCTConvert NSString:obj[@"password"]];
+    }
+    [_IMAPSessions setValue:imapSession forKey:userEmail];
+    MCOIMAPOperation *imapOperation = [imapSession checkAccountOperation];
+    [imapOperation start:^(NSError *error) {
+        if(error) {
+            reject(@"Error", error.localizedDescription, error);
         } else {
-            imapSession.password = [RCTConvert NSString:obj[@"password"]];
+            NSDictionary *result = @{@"status": @"SUCCESS"};
+            resolve(result);
         }
-        [_IMAPSessions setValue:imapSession forKey:userEmail];
-        MCOIMAPOperation *imapOperation = [imapSession checkAccountOperation];
-        [imapOperation start:^(NSError *error) {
-            if(error) {
-                reject(@"Error", error.localizedDescription, error);
-            } else {
-                NSDictionary *result = @{@"status": @"SUCCESS"};
-                resolve(result);
-            }
-        }];
+    }];
 //    } else {
 //        NSLog(@"currentSession %@", currentSession);
 //        MCOIMAPOperation *imapOperation = [currentSession noopOperation];
@@ -299,15 +299,15 @@ RCT_EXPORT_METHOD(permantDeleteEmail:(NSDictionary *)obj resolver:(RCTPromiseRes
             if(error) {
                 reject(@"Error", error.localizedDescription, error);
             } else {
-            }
-        }];
-        imapOperation = [_imapSession expungeOperation:folder];
-        [imapOperation start:^(NSError * error) {
-            if(error) {
-                reject(@"Error", error.localizedDescription, error);
-            } else {
-                NSDictionary *result = @{@"status": @"SUCCESS"};
-                resolve(result);
+                MCOIMAPOperation *expungeOperation = [userImapSession expungeOperation:folder];
+                [expungeOperation start:^(NSError * error) {
+                    if(error) {
+                        reject(@"Error", error.localizedDescription, error);
+                    } else {
+                        NSDictionary *result = @{@"status": @"SUCCESS"};
+                        resolve(result);
+                    }
+                }];
             }
         }];
     } else {
@@ -516,10 +516,8 @@ RCT_EXPORT_METHOD(getMail:(NSDictionary *)obj resolver:(RCTPromiseResolveBlock)r
         unsigned long long valueUInt64 = messageId.unsignedLongLongValue;
         MCOIndexSet *uid = [MCOIndexSet indexSetWithIndex:valueUInt64];
         int requestKind = [RCTConvert int:obj[@"requestKind"]];
-        
-        NSLog(@"IMapSession %@", _IMAPSessions);
+    
         NSString *userEmail = [RCTConvert NSString:obj[@"email"]];
-        NSLog(@"userEmail %@", userEmail);
         MCOIMAPSession *userImapSession = _IMAPSessions[userEmail];
         if (userImapSession) {
             MCOIMAPFetchMessagesOperation *fetchOperation = [userImapSession fetchMessagesOperationWithFolder:folder requestKind:requestKind uids:uid];
